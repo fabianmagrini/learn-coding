@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Interactive Three.js Rubik's Cube (2–20) single-file app with smooth layer rotations, scramble, and visual solve." />
+  <title>Three.js Rubik's Cube (Up to 20x20x20)</title>
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; background: #111; color: #eee; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    #app { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr; }
+    #toolbar {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; background: #1b1b1b;
+      border-bottom: 1px solid #2a2a2a; box-shadow: 0 1px 0 rgba(255,255,255,0.05);
+      position: relative; z-index: 5;
+    }
+    #toolbar .group { display: inline-flex; gap: 6px; align-items: center; background: #191919; padding: 6px 8px; border-radius: 8px; border: 1px solid #2a2a2a; }
+    #toolbar label { font-size: 12px; color: #aaa; }
+    #toolbar input[type="number"],
+    #toolbar select,
+    #toolbar input[type="range"] {
+      background: #0f0f0f; color: #eee; border: 1px solid #333; padding: 4px 6px; border-radius: 6px; height: 28px;
+    }
+    #toolbar input[type="range"] { height: auto; }
+    #toolbar button {
+      height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid #2a2a2a; background: #2b2b2b; color: #eee; cursor: pointer;
+    }
+    #toolbar button.primary { background: #335cff; border-color: #2b4de0; }
+    #toolbar button:disabled { opacity: 0.6; cursor: not-allowed; }
+    #renderer { position: relative; }
+    #hint { position: absolute; right: 12px; bottom: 12px; font-size: 12px; color: #bbb; background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 6px; border: 1px solid #2a2a2a; }
+  </style>
+  <!-- Map bare specifier 'three' to the CDN ESM build so example modules can import it in the browser -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.159.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <div id="toolbar">
+      <div class="group">
+        <label for="size">Size</label>
+        <input id="size" type="number" min="2" max="20" step="1" value="3" />
+        <button id="build" title="Rebuild cube to selected size">Build</button>
+      </div>
+      <div class="group">
+        <label for="axis">Axis</label>
+        <select id="axis">
+          <option value="x">X</option>
+          <option value="y">Y</option>
+          <option value="z" selected>Z</option>
+        </select>
+        <label for="layer">Layer</label>
+        <input id="layer" type="range" min="0" max="2" step="1" value="0" />
+        <span id="layerLabel">1</span>
+        <label for="dir">Dir</label>
+        <select id="dir">
+          <option value="1">CW</option>
+          <option value="-1">CCW</option>
+        </select>
+        <button id="rotate">Rotate</button>
+      </div>
+      <div class="group">
+        <button id="scramble">Scramble</button>
+        <button id="solve" class="primary">Solve</button>
+        <label for="speed">Speed</label>
+        <input id="speed" type="range" min="0.1" max="2.5" step="0.1" value="1" />
+      </div>
+      <div class="group">
+        <button id="resetView">Reset View</button>
+        <button id="resetCube">Reset Cube</button>
+      </div>
+    </div>
+    <div id="renderer">
+      <canvas id="c"></canvas>
+      <div id="hint">Mouse: rotate | Shift+Wheel: zoom | Ctrl+Drag: pan</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
+
+    // UI Elements
+    const ui = {
+      size: document.getElementById('size'),
+      build: document.getElementById('build'),
+      axis: document.getElementById('axis'),
+      layer: document.getElementById('layer'),
+      layerLabel: document.getElementById('layerLabel'),
+      dir: document.getElementById('dir'),
+      rotate: document.getElementById('rotate'),
+      scramble: document.getElementById('scramble'),
+      solve: document.getElementById('solve'),
+      speed: document.getElementById('speed'),
+      resetView: document.getElementById('resetView'),
+      resetCube: document.getElementById('resetCube'),
+      canvas: document.getElementById('c'),
+      container: document.getElementById('renderer'),
+    };
+
+    // Renderer/Scene/Camera
+    const renderer = new THREE.WebGLRenderer({ canvas: ui.canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111111);
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+    camera.position.set(6, 6, 10);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight.position.set(5, 8, 10);
+    scene.add(dirLight);
+
+    // Resize handling
+    function onResize() {
+      const rect = ui.container.getBoundingClientRect();
+      renderer.setSize(rect.width, rect.height, false);
+      camera.aspect = rect.width / rect.height;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+    onResize();
+
+    // Easing
+    const Ease = {
+      inOutCubic: (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+    };
+
+    // Colors (standard scheme)
+    const COLORS = {
+      // World reference orientation at start:
+      // +Y: white (Up), -Y: yellow (Down)
+      // +X: red (Right), -X: orange (Left)
+      // +Z: green (Front), -Z: blue (Back)
+      UP: 0xffffff,
+      DOWN: 0xffff00,
+      RIGHT: 0xff0000,
+      LEFT: 0xff8c00,
+      FRONT: 0x00a651,
+      BACK: 0x0051ba,
+      BLACK: 0x000000,
+    };
+
+  // Reusable temp objects to minimize allocations
+  const _q = new THREE.Quaternion();
+    const _m4 = new THREE.Matrix4();
+
+    // Sticker orientation quaternions (plane geometry has +Z normal by default)
+    const Q_FACE = {
+      "PX": new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), new THREE.Vector3(1,0,0)),
+      "NX": new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), new THREE.Vector3(-1,0,0)),
+      "PY": new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), new THREE.Vector3(0,1,0)),
+      "NY": new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), new THREE.Vector3(0,-1,0)),
+      "PZ": new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,1)),
+      "NZ": new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)),
+    };
+
+    function axisQuat(axis, angle) {
+      switch(axis) {
+        case 'x': return _q.setFromAxisAngle(new THREE.Vector3(1,0,0), angle).clone();
+        case 'y': return _q.setFromAxisAngle(new THREE.Vector3(0,1,0), angle).clone();
+        default:  return _q.setFromAxisAngle(new THREE.Vector3(0,0,1), angle).clone();
+      }
+    }
+
+    // Rubik Cube object
+    class RubiksCube {
+      constructor(size = 3) {
+        this.size = size;
+        this.spacing = 0.04; // gap between cubies for visibility
+        this.cubieSize = 1.0; // base cubie size
+        this.stickerInset = 0.12; // shrink factor for sticker size (relative to cubie)
+        this.stickerLift = 0.02; // push stickers out to avoid z-fighting
+        this.speedScale = 1.0; // animation speed multiplier
+
+        this.group = new THREE.Group();
+        scene.add(this.group);
+
+        // Data arrays
+        const N = size;
+        const total = N * N * N;
+        this.cubieQuat = new Array(total); // Quaternion per cubie
+        this.indices = new Array(total);   // [i,j,k] per cubie
+
+        // Mapping: grid (i,j,k) -> index
+        this.idx = (i,j,k) => i*N*N + j*N + k;
+
+        // Base materials/geometries
+        const boxGeo = new THREE.BoxGeometry(this.cubieSize * 0.96, this.cubieSize * 0.96, this.cubieSize * 0.96);
+        const cubieMat = new THREE.MeshStandardMaterial({ color: COLORS.BLACK, roughness: 0.8, metalness: 0.0 });
+        this.cubieMesh = new THREE.InstancedMesh(boxGeo, cubieMat, total);
+        this.cubieMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.group.add(this.cubieMesh);
+
+        // Sticker meshes (grouped by local face)
+        const stickerSize = this.cubieSize * (1 - this.stickerInset);
+        const stickerGeo = new THREE.PlaneGeometry(stickerSize, stickerSize);
+        const makeStickerMat = (hex) => new THREE.MeshBasicMaterial({ color: hex, side: THREE.DoubleSide });
+
+        this.stickerMeshes = {
+          PX: new THREE.InstancedMesh(stickerGeo, makeStickerMat(COLORS.RIGHT),   0),
+          NX: new THREE.InstancedMesh(stickerGeo, makeStickerMat(COLORS.LEFT),    0),
+          PY: new THREE.InstancedMesh(stickerGeo, makeStickerMat(COLORS.UP),      0),
+          NY: new THREE.InstancedMesh(stickerGeo, makeStickerMat(COLORS.DOWN),    0),
+          PZ: new THREE.InstancedMesh(stickerGeo, makeStickerMat(COLORS.FRONT),   0),
+          NZ: new THREE.InstancedMesh(stickerGeo, makeStickerMat(COLORS.BACK),    0),
+        };
+        for (const key of Object.keys(this.stickerMeshes)) {
+          const m = this.stickerMeshes[key];
+          m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          this.group.add(m);
+        }
+
+        // cubieStickerRefs: array of arrays of refs {face, meshKey, instance}
+        this.cubieStickerRefs = new Array(total);
+        for (let ci = 0; ci < total; ci++) this.cubieStickerRefs[ci] = [];
+
+        // Initialize indices and quaternions
+        for (let i = 0; i < N; i++) {
+          for (let j = 0; j < N; j++) {
+            for (let k = 0; k < N; k++) {
+              const ci = this.idx(i,j,k);
+              this.indices[ci] = [i,j,k];
+              this.cubieQuat[ci] = new THREE.Quaternion(); // identity
+            }
+          }
+        }
+
+        // Build sticker instance pools based on which cubies are on original faces
+        const faceToCubies = { PX: [], NX: [], PY: [], NY: [], PZ: [], NZ: [] };
+        for (let i = 0; i < N; i++) {
+          for (let j = 0; j < N; j++) {
+            for (let k = 0; k < N; k++) {
+              const ci = this.idx(i,j,k);
+              if (i === N-1) faceToCubies.PX.push(ci);
+              if (i === 0)   faceToCubies.NX.push(ci);
+              if (j === N-1) faceToCubies.PY.push(ci);
+              if (j === 0)   faceToCubies.NY.push(ci);
+              if (k === N-1) faceToCubies.PZ.push(ci);
+              if (k === 0)   faceToCubies.NZ.push(ci);
+            }
+          }
+        }
+        // Resize instanced meshes to exact counts
+        for (const key of Object.keys(faceToCubies)) {
+          const list = faceToCubies[key];
+          const old = this.stickerMeshes[key];
+          // Replace with a new InstancedMesh with correct count (resize isn't supported)
+          const newMesh = new THREE.InstancedMesh(old.geometry, old.material, list.length);
+          newMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          this.group.remove(old);
+          this.stickerMeshes[key] = newMesh;
+          this.group.add(newMesh);
+        }
+        // Fill mapping from cubie -> sticker instances
+        const addRef = (ci, meshKey, instance) => {
+          this.cubieStickerRefs[ci].push({ meshKey, instance });
+        };
+        let counters = { PX:0, NX:0, PY:0, NY:0, PZ:0, NZ:0 };
+        for (let i = 0; i < N; i++) {
+          for (let j = 0; j < N; j++) {
+            for (let k = 0; k < N; k++) {
+              const ci = this.idx(i,j,k);
+              if (i === N-1) addRef(ci, 'PX', counters.PX++);
+              if (i === 0)   addRef(ci, 'NX', counters.NX++);
+              if (j === N-1) addRef(ci, 'PY', counters.PY++);
+              if (j === 0)   addRef(ci, 'NY', counters.NY++);
+              if (k === N-1) addRef(ci, 'PZ', counters.PZ++);
+              if (k === 0)   addRef(ci, 'NZ', counters.NZ++);
+            }
+          }
+        }
+
+        // Animation queue
+        this.queue = [];
+        this.activeMove = null; // { axis, layer, dir, duration, startTime, baseQuats, affected }
+        this.moveHistory = [];
+
+        // Initial matrices
+        this.updateAllMatrices();
+      }
+
+      dispose() {
+        scene.remove(this.group);
+        this.group.traverse(obj => {
+          if (obj.isMesh || obj.isInstancedMesh) {
+            obj.geometry?.dispose?.();
+            if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+            else obj.material?.dispose?.();
+          }
+        });
+      }
+
+      gridToPos(i,j,k) {
+        const N = this.size;
+        const d = this.cubieSize + this.spacing;
+        const cx = (N - 1) / 2;
+        return new THREE.Vector3((i - cx) * d, (j - cx) * d, (k - cx) * d);
+      }
+
+      updateCubieMatrix(ci, pos, quat) {
+        _m4.compose(pos, quat, new THREE.Vector3(1,1,1));
+        this.cubieMesh.setMatrixAt(ci, _m4);
+      }
+
+      updateStickerFor(ci, pos, quat) {
+        const lift = this.cubieSize/2 + this.stickerLift;
+        const meshes = this.stickerMeshes;
+        const refs = this.cubieStickerRefs[ci];
+        for (let r = 0; r < refs.length; r++) {
+          const { meshKey, instance } = refs[r];
+          let localNormal;
+          let qFace;
+          switch(meshKey) {
+            case 'PX': localNormal = new THREE.Vector3(1,0,0); qFace = Q_FACE.PX; break;
+            case 'NX': localNormal = new THREE.Vector3(-1,0,0); qFace = Q_FACE.NX; break;
+            case 'PY': localNormal = new THREE.Vector3(0,1,0); qFace = Q_FACE.PY; break;
+            case 'NY': localNormal = new THREE.Vector3(0,-1,0); qFace = Q_FACE.NY; break;
+            case 'PZ': localNormal = new THREE.Vector3(0,0,1); qFace = Q_FACE.PZ; break;
+            case 'NZ': localNormal = new THREE.Vector3(0,0,-1); qFace = Q_FACE.NZ; break;
+          }
+          // World-space position of sticker center
+          const worldOffset = localNormal.clone().applyQuaternion(quat).multiplyScalar(lift);
+          const stickerPos = pos.clone().add(worldOffset);
+          const stickerQuat = quat.clone().multiply(qFace);
+          _m4.compose(stickerPos, stickerQuat, new THREE.Vector3(1,1,1));
+          meshes[meshKey].setMatrixAt(instance, _m4);
+        }
+      }
+
+      updateCubieAndStickers(ci, pos, quat) {
+        this.updateCubieMatrix(ci, pos, quat);
+        this.updateStickerFor(ci, pos, quat);
+      }
+
+      updateAllMatrices() {
+        const N = this.size;
+        for (let ci = 0; ci < N*N*N; ci++) {
+          const [i,j,k] = this.indices[ci];
+          const pos = this.gridToPos(i,j,k);
+          const quat = this.cubieQuat[ci];
+          this.updateCubieAndStickers(ci, pos, quat);
+        }
+        this.cubieMesh.instanceMatrix.needsUpdate = true;
+        for (const key of Object.keys(this.stickerMeshes)) {
+          this.stickerMeshes[key].instanceMatrix.needsUpdate = true;
+        }
+      }
+
+      // Enqueue a 90-degree layer rotation
+      enqueueMove(axis, layer, dir = 1, duration = 300) {
+        this.queue.push({ axis, layer, dir, duration: duration / this.speedScale });
+      }
+
+      // Apply one move immediately to state (no animation) — used to finalize after anim
+      applyMoveState(axis, layer, dir) {
+        const N = this.size;
+        const rotQ = axisQuat(axis, dir * Math.PI/2);
+        const affect = [];
+        for (let ci = 0; ci < N*N*N; ci++) {
+          const [i,j,k] = this.indices[ci];
+          if ((axis === 'x' && i === layer) || (axis === 'y' && j === layer) || (axis === 'z' && k === layer)) {
+            affect.push(ci);
+          }
+        }
+        // Update indices map
+        for (const ci of affect) {
+          let [i,j,k] = this.indices[ci];
+          if (axis === 'x') {
+            const j2 = dir > 0 ? (N-1 - k) : k;
+            const k2 = dir > 0 ? j : (N-1 - j);
+            this.indices[ci] = [i, j2, k2];
+          } else if (axis === 'y') {
+            const i2 = dir > 0 ? k : (N-1 - k);
+            const k2 = dir > 0 ? (N-1 - i) : i;
+            this.indices[ci] = [i2, j, k2];
+          } else { // 'z'
+            const i2 = dir > 0 ? (N-1 - j) : j;
+            const j2 = dir > 0 ? i : (N-1 - i);
+            this.indices[ci] = [i2, j2, k];
+          }
+          // Update orientation
+          this.cubieQuat[ci] = rotQ.clone().multiply(this.cubieQuat[ci]);
+        }
+      }
+
+      // Begin animating the next move if idle
+      pumpQueue(now) {
+        if (this.activeMove || this.queue.length === 0) return;
+        const move = this.queue.shift();
+        // Prepare active move with base snapshots
+        const N = this.size;
+        const affected = [];
+        for (let ci = 0; ci < N*N*N; ci++) {
+          const [i,j,k] = this.indices[ci];
+          if ((move.axis === 'x' && i === move.layer) || (move.axis === 'y' && j === move.layer) || (move.axis === 'z' && k === move.layer)) {
+            affected.push(ci);
+          }
+        }
+        const base = affected.map(ci => ({
+          ci,
+          pos: this.gridToPos(...this.indices[ci]),
+          quat: this.cubieQuat[ci].clone(),
+        }));
+        this.activeMove = {
+          ...move,
+          start: now,
+          affected,
+          base,
+        };
+        // Record history (for Solve), but only if this was user-initiated enqueue (not inverse during solve)
+        if (!this._replayingSolution) {
+          this.moveHistory.push({ axis: move.axis, layer: move.layer, dir: move.dir });
+        }
+      }
+
+      // Update animation step
+      update(now) {
+        // Start next queued move if idle
+        this.pumpQueue(now);
+
+        const am = this.activeMove;
+        if (!am) return;
+        const t = Math.min(1, (now - am.start) / am.duration);
+        const eased = Ease.inOutCubic(t);
+        const angle = am.dir * (Math.PI/2) * eased;
+        const rotQ = axisQuat(am.axis, angle);
+
+        // Update only affected cubies (temporary matrices during animation)
+        for (let b = 0; b < am.base.length; b++) {
+          const { ci, pos, quat } = am.base[b];
+          const pos2 = pos.clone().applyQuaternion(rotQ);
+          const quat2 = rotQ.clone().multiply(quat);
+          this.updateCubieAndStickers(ci, pos2, quat2);
+        }
+        this.cubieMesh.instanceMatrix.needsUpdate = true;
+        for (const key of Object.keys(this.stickerMeshes)) this.stickerMeshes[key].instanceMatrix.needsUpdate = true;
+
+        if (t >= 1) {
+          // Commit state
+          this.applyMoveState(am.axis, am.layer, am.dir);
+          this.updateAllMatrices(); // snap to perfect grid
+          this.activeMove = null;
+          // Immediately try to start next move
+          this.pumpQueue(now);
+        }
+      }
+
+      // PUBLIC API
+      rotate(axis, layer, dir, duration) {
+        // Normalize layer into [0, N-1]
+        layer = Math.max(0, Math.min(this.size - 1, layer|0));
+        dir = dir >= 0 ? 1 : -1;
+        this.enqueueMove(axis, layer, dir, duration);
+      }
+
+      scramble(count = 20) {
+        const N = this.size;
+        const axes = ['x','y','z'];
+        for (let s = 0; s < count; s++) {
+          const axis = axes[(Math.random() * 3) | 0];
+          const layer = (Math.random() * N) | 0;
+          const dir = Math.random() < 0.5 ? 1 : -1;
+          this.enqueueMove(axis, layer, dir, 220);
+        }
+      }
+
+      solve() {
+        if (this.activeMove || this.queue.length) {
+          // Let current moves finish first, then solve
+          const intv = setInterval(() => {
+            if (!this.activeMove && this.queue.length === 0) {
+              clearInterval(intv);
+              this._replayingSolution = true;
+              for (let i = this.moveHistory.length - 1; i >= 0; i--) {
+                const m = this.moveHistory[i];
+                this.enqueueMove(m.axis, m.layer, -m.dir, 260);
+              }
+              // Clear history after scheduling solution
+              this.moveHistory = [];
+              // Unset flag when the queue is done
+              const chk = setInterval(() => {
+                if (!this.activeMove && this.queue.length === 0) { this._replayingSolution = false; clearInterval(chk); }
+              }, 50);
+            }
+          }, 50);
+        } else {
+          this._replayingSolution = true;
+          for (let i = this.moveHistory.length - 1; i >= 0; i--) {
+            const m = this.moveHistory[i];
+            this.enqueueMove(m.axis, m.layer, -m.dir, 260);
+          }
+          this.moveHistory = [];
+          const chk = setInterval(() => {
+            if (!this.activeMove && this.queue.length === 0) { this._replayingSolution = false; clearInterval(chk); }
+          }, 50);
+        }
+      }
+
+      resetState() {
+        const N = this.size;
+        for (let i = 0; i < N; i++) {
+          for (let j = 0; j < N; j++) {
+            for (let k = 0; k < N; k++) {
+              const ci = this.idx(i,j,k);
+              this.indices[ci] = [i,j,k];
+              this.cubieQuat[ci].identity();
+            }
+          }
+        }
+        this.queue.length = 0;
+        this.activeMove = null;
+        this.moveHistory.length = 0;
+        this.updateAllMatrices();
+      }
+
+      setSpeed(scale) { this.speedScale = Math.max(0.1, Number(scale) || 1); }
+    }
+
+    // App wiring
+    let cube = null;
+
+    function buildCube() {
+      const size = Math.max(2, Math.min(20, parseInt(ui.size.value) || 3));
+      ui.size.value = String(size);
+      if (cube) cube.dispose();
+      cube = new RubiksCube(size);
+      // Update UI layer slider
+      ui.layer.max = String(size - 1);
+      ui.layer.value = '0';
+      ui.layerLabel.textContent = '1';
+      // Fit camera distance to cube size
+      fitCameraToCube(size);
+    }
+
+    function fitCameraToCube(N) {
+      const d = (N * (1.0 + 0.04)) * 0.6; // heuristic radius
+      const dist = Math.max(6, d * 2.2);
+      camera.position.set(dist, dist, dist);
+      controls.target.set(0,0,0);
+      controls.update();
+    }
+
+    // UI events
+    ui.build.addEventListener('click', buildCube);
+    ui.layer.addEventListener('input', () => {
+      ui.layerLabel.textContent = String(parseInt(ui.layer.value) + 1);
+    });
+    ui.rotate.addEventListener('click', () => {
+      if (!cube) return;
+      cube.rotate(ui.axis.value, parseInt(ui.layer.value), parseInt(ui.dir.value), 260);
+    });
+    ui.scramble.addEventListener('click', () => cube && cube.scramble(25));
+    ui.solve.addEventListener('click', () => cube && cube.solve());
+    ui.speed.addEventListener('input', () => cube && cube.setSpeed(parseFloat(ui.speed.value)));
+    ui.resetView.addEventListener('click', () => { fitCameraToCube(cube?.size || 3); });
+    ui.resetCube.addEventListener('click', () => cube && cube.resetState());
+
+    // Build initial cube
+    buildCube();
+
+    // Render loop
+    function animate(nowMs) {
+      requestAnimationFrame(animate);
+      const now = nowMs || performance.now();
+      controls.update();
+      cube?.update(now);
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
