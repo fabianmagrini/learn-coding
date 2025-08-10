@@ -1,0 +1,27 @@
+{
+  "name": "md2html",
+  "version": "1.0.0",
+  "description": "A CLI Markdown-to-HTML converter using Bun + TypeScript",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "md2html": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "bun build ./src/cli.ts --outdir ./dist --target bun",
+    "dev": "bun run src/cli.ts",
+    "test": "bun test",
+    "lint": "bun run --bun tsc --noEmit"
+  },
+  "dependencies": {
+    "marked": "^12.0.0",
+    "meow": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

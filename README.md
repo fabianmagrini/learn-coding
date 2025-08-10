@@ -15,3 +15,8 @@ This repository is organized as follows:
     - **Architecture**: Two TypeScript microservices (products-service and orders-service) with comprehensive monitoring infrastructure including Jaeger for distributed tracing, Prometheus for metrics collection, and Grafana for visualization.
     - **Features**: Demonstrates containerization with Docker, structured logging, health checks, graceful shutdown, security best practices, and comprehensive testing strategies.
     - **Technology Stack**: Node.js, TypeScript, Express, OpenTelemetry, Pino logging, Jest testing, and Docker Compose orchestration.
+
+- **`typescript/md2html/`**: This directory contains a fast and simple CLI Markdown-to-HTML converter built with Bun and TypeScript.
+    - **Features**: Fast conversion powered by Bun runtime, supports single file or directory conversion, flexible output options, built-in styling, custom templates, CSS integration, and comprehensive test coverage.
+    - **Technology Stack**: TypeScript, Bun runtime, marked (Markdown parser), meow (CLI helper), with modular architecture for easy extension.
+    - **Usage**: Command-line tool that can convert individual Markdown files or entire directories to HTML with customizable templates and styling options.
