@@ -1,0 +1,20 @@
+{
+  "name": "@onya/e2e-tests",
+  "version": "1.0.0",
+  "description": "End-to-end tests for Onya chatbot system",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:docker": "docker-compose -f ../../docker-compose.yml up -d && npm test && docker-compose -f ../../docker-compose.yml down",
+    "test:report": "playwright show-report",
+    "install-browsers": "playwright install"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}

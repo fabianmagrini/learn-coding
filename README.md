@@ -20,3 +20,8 @@ This repository is organized as follows:
     - **Features**: Fast conversion powered by Bun runtime, supports single file or directory conversion, flexible output options, built-in styling, custom templates, CSS integration, and comprehensive test coverage.
     - **Technology Stack**: TypeScript, Bun runtime, marked (Markdown parser), meow (CLI helper), with modular architecture for easy extension.
     - **Usage**: Command-line tool that can convert individual Markdown files or entire directories to HTML with customizable templates and styling options.
+
+- **`nodejs/onya/`**: This directory contains a comprehensive AI-powered customer service chatbot system with seamless human escalation capabilities.
+    - **Architecture**: Modern microservices architecture with React frontends (customer and operator apps), Node.js BFF (Backend for Frontend) services, and shared business logic services with integrated AI/LLM capabilities.
+    - **Features**: AI-powered chat responses, real-time WebSocket communication, smart escalation triggers, operator dashboard, enterprise security with JWT authentication, comprehensive monitoring and alerting, and 200+ test coverage.
+    - **Technology Stack**: TypeScript, React 18, tRPC, Node.js/Express, PostgreSQL with Prisma ORM, Redis caching, OpenAI API integration, Docker containerization, and Prometheus/Grafana monitoring.

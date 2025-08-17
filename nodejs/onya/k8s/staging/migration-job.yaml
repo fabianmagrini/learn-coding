@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: onya-db-migration
+  namespace: onya-chatbot
+  labels:
+    app: onya-db-migration
+    component: migration
+spec:
+  template:
+    metadata:
+      labels:
+        app: onya-db-migration
+        component: migration
+    spec:
+      serviceAccountName: onya-service-account
+      restartPolicy: Never
+      containers:
+      - name: migration
+        image: ghcr.io/onya/onya-chatbot/shared-services:${IMAGE_TAG}
+        command: ["npm", "run", "db:migrate"]
+        env:
+        - name: NODE_ENV
+          value: "staging"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: onya-secrets
+              key: database-url
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+      backoffLimit: 3
+      activeDeadlineSeconds: 600

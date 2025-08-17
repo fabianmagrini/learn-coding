@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: onya_db
+      POSTGRES_USER: onya
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./services/shared-services/database/init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onya -d onya_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Shared Services
+  shared-services:
+    build:
+      context: ./services/shared-services
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - LLM_PROVIDER=mock
+      - SERVICE_TOKEN=shared-service-secret-token
+      - LOG_LEVEL=info
+      - DATABASE_URL=postgresql://onya:password@postgres:5432/onya_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=development-jwt-secret-change-in-production
+      - JWT_REFRESH_SECRET=development-refresh-secret-change-in-production
+    volumes:
+      - ./services/shared-services/src:/app/src
+      - ./services/shared-services/logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Customer BFF
+  customer-bff:
+    build:
+      context: ./bffs/customer-bff
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - SHARED_SERVICES_URL=http://shared-services:3000
+      - SERVICE_TOKEN=shared-service-secret-token
+      - SESSION_SECRET=customer-bff-session-secret
+      - CUSTOMER_APP_URL=http://localhost:5173
+      - LOG_LEVEL=info
+    volumes:
+      - ./bffs/customer-bff/src:/app/src
+      - ./bffs/customer-bff/logs:/app/logs
+    depends_on:
+      - shared-services
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Customer App
+  customer-app:
+    build:
+      context: ./apps/customer-app
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_CUSTOMER_BFF_URL=http://localhost:3001
+      - VITE_CUSTOMER_ID=demo-customer
+      - VITE_CUSTOMER_NAME=Demo Customer
+      - VITE_CUSTOMER_EMAIL=demo@example.com
+      - VITE_CUSTOMER_TIER=basic
+    volumes:
+      - ./apps/customer-app/src:/app/src
+      - ./apps/customer-app/public:/app/public
+      - /app/node_modules
+    depends_on:
+      - customer-bff
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: onya-network
