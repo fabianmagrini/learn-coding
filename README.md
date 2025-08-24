@@ -25,3 +25,8 @@ This repository is organized as follows:
     - **Architecture**: Modern microservices architecture with React frontends (customer and operator apps), Node.js BFF (Backend for Frontend) services, and shared business logic services with integrated AI/LLM capabilities.
     - **Features**: AI-powered chat responses, real-time WebSocket communication, smart escalation triggers, operator dashboard, enterprise security with JWT authentication, comprehensive monitoring and alerting, and 200+ test coverage.
     - **Technology Stack**: TypeScript, React 18, tRPC, Node.js/Express, PostgreSQL with Prisma ORM, Redis caching, OpenAI API integration, Docker containerization, and Prometheus/Grafana monitoring.
+
+- **`typescript/brevity/`**: This directory contains an AI-powered content summarization and rewriting application with real-time streaming capabilities.
+    - **Architecture**: Full-stack TypeScript application with React frontend and Express.js backend, organized using vertical slice architecture by feature for better maintainability.
+    - **Features**: Content summarization with adjustable length options, text rewriting with different tone styles, PDF upload and text extraction, real-time streaming responses using Vercel AI SDK, and responsive modern UI.
+    - **Technology Stack**: React, TypeScript, Express.js, Vercel AI SDK, Tailwind CSS, Rsbuild, Multer for file uploads, and pdf-parse for PDF text extraction.

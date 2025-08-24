@@ -1,0 +1,23 @@
+{
+  "name": "brevity",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered content summarizer and rewriter",
+  "scripts": {
+    "dev": "pnpm --parallel dev",
+    "build": "pnpm --parallel build",
+    "test": "pnpm --parallel test"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  }
+}
