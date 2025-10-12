@@ -1,0 +1,91 @@
+{
+  "mocks": [
+    {
+      "description": "Get all users",
+      "request": {
+        "method": "GET",
+        "path": "/api/users"
+      },
+      "response": {
+        "statusCode": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": [
+          {
+            "id": "1",
+            "name": "John Doe",
+            "email": "john.doe@example.com"
+          },
+          {
+            "id": "2",
+            "name": "Jane Smith",
+            "email": "jane.smith@example.com"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Get a specific user by ID",
+      "request": {
+        "method": "GET",
+        "path": "/api/users/:id"
+      },
+      "response": {
+        "statusCode": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "id": "{{request.params.id}}",
+          "name": "John Doe",
+          "email": "john.doe@example.com",
+          "createdAt": "2025-01-15T10:00:00Z"
+        }
+      }
+    },
+    {
+      "description": "Create a new user",
+      "request": {
+        "method": "POST",
+        "path": "/api/users"
+      },
+      "response": {
+        "statusCode": 201,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "id": "123",
+          "name": "New User",
+          "email": "new@example.com",
+          "message": "User created successfully"
+        }
+      }
+    },
+    {
+      "description": "Update a user",
+      "request": {
+        "method": "PUT",
+        "path": "/api/users/:id"
+      },
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "id": "{{request.params.id}}",
+          "message": "User updated successfully"
+        }
+      }
+    },
+    {
+      "description": "Delete a user",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/users/:id"
+      },
+      "response": {
+        "statusCode": 204
+      }
+    }
+  ]
+}
