@@ -30,3 +30,8 @@ This repository is organized as follows:
     - **Architecture**: Full-stack TypeScript application with React frontend and Express.js backend, organized using vertical slice architecture by feature for better maintainability.
     - **Features**: Content summarization with adjustable length options, text rewriting with different tone styles, PDF upload and text extraction, real-time streaming responses using Vercel AI SDK, and responsive modern UI.
     - **Technology Stack**: React, TypeScript, Express.js, Vercel AI SDK, Tailwind CSS, Rsbuild, Multer for file uploads, and pdf-parse for PDF text extraction.
+
+- **`typescript/json-query-kit/`**: This directory contains a lightweight, type-safe TypeScript library for sorting, filtering, and paginating JSON data.
+    - **Features**: Fluent API with method chaining, comprehensive filtering with multiple operators and logical combinations (AND/OR), flexible sorting (single-field, multi-field, and custom functions), dual pagination support (page-based and offset-based), zero external dependencies, and full TypeScript type safety.
+    - **Technology Stack**: TypeScript, Jest for testing, with Express.js integration examples demonstrating REST API usage and React hook patterns for frontend integration.
+    - **Use Cases**: Client-side or server-side data manipulation, REST API query implementation, frontend data filtering and pagination, and framework-agnostic JSON data processing.
