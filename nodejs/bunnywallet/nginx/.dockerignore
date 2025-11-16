@@ -1,0 +1,6 @@
+*.sh
+README.md
+.git
+.gitignore
+*.md
+certs/*.csr

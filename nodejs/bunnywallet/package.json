@@ -1,0 +1,24 @@
+{
+  "name": "bunnywallet",
+  "version": "1.0.0",
+  "description": "Multi-account financial dashboard with Account Query Service architecture",
+  "private": true,
+  "workspaces": [
+    "aqs-service",
+    "mock-backends/*",
+    "frontend/react-app"
+  ],
+  "scripts": {
+    "dev:aqs": "npm run dev --workspace=aqs-service",
+    "dev:frontend": "npm run dev --workspace=frontend/react-app",
+    "mock:start": "npm run start --workspaces --if-present --workspace=mock-backends/*",
+    "test:unit": "npm run test --workspaces --if-present",
+    "test:contract": "npm run test:contract --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "keywords": ["aqs", "account-query-service", "financial-dashboard"],
+  "author": "",
+  "license": "MIT"
+}

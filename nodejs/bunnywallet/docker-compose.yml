@@ -1,0 +1,212 @@
+version: '3.8'
+
+services:
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: bunnywallet-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Mock Backend Services
+  bank-service:
+    build:
+      context: ./mock-backends/bank-service
+      dockerfile: Dockerfile
+    container_name: bunnywallet-bank-service
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - BANK_API_KEY=bank-demo-key-123
+
+  credit-service:
+    build:
+      context: ./mock-backends/credit-service
+      dockerfile: Dockerfile
+    container_name: bunnywallet-credit-service
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - CREDIT_API_KEY=credit-demo-key-456
+
+  loan-service:
+    build:
+      context: ./mock-backends/loan-service
+      dockerfile: Dockerfile
+    container_name: bunnywallet-loan-service
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - LOAN_API_KEY=loan-demo-key-789
+
+  investment-service:
+    build:
+      context: ./mock-backends/investment-service
+      dockerfile: Dockerfile
+    container_name: bunnywallet-investment-service
+    ports:
+      - "3004:3004"
+    environment:
+      - PORT=3004
+      - INVESTMENT_API_KEY=investment-demo-key-abc
+
+  legacy-service:
+    build:
+      context: ./mock-backends/legacy-service
+      dockerfile: Dockerfile
+    container_name: bunnywallet-legacy-service
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - LEGACY_API_KEY=legacy-demo-key-xyz
+
+  crypto-service:
+    build:
+      context: ./mock-backends/crypto-service
+      dockerfile: Dockerfile
+    container_name: bunnywallet-crypto-service
+    ports:
+      - "3006:3006"
+    environment:
+      - PORT=3006
+      - CRYPTO_API_KEY=crypto-demo-key-def
+
+  # NGINX API Gateway
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: bunnywallet-nginx
+    ports:
+      - "80:80"      # HTTP (redirects to HTTPS)
+      - "443:443"    # HTTPS
+      - "8081:8081"  # Health check
+    depends_on:
+      - aqs-service
+      - frontend
+      - prometheus
+      - grafana
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/nginx-health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # Account Query Service
+  aqs-service:
+    build:
+      context: ./aqs-service
+      dockerfile: Dockerfile
+    container_name: bunnywallet-aqs
+    expose:
+      - "8080"
+    environment:
+      - AQS_PORT=8080
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=dev-secret-key-change-in-production
+      - BANK_SERVICE_URL=http://bank-service:3001
+      - CREDIT_SERVICE_URL=http://credit-service:3002
+      - LOAN_SERVICE_URL=http://loan-service:3003
+      - INVESTMENT_SERVICE_URL=http://investment-service:3004
+      - LEGACY_SERVICE_URL=http://legacy-service:3005
+      - CRYPTO_SERVICE_URL=http://crypto-service:3006
+      - BANK_API_KEY=bank-demo-key-123
+      - CREDIT_API_KEY=credit-demo-key-456
+      - LOAN_API_KEY=loan-demo-key-789
+      - INVESTMENT_API_KEY=investment-demo-key-abc
+      - LEGACY_API_KEY=legacy-demo-key-xyz
+      - CRYPTO_API_KEY=crypto-demo-key-def
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    depends_on:
+      - redis
+      - bank-service
+      - credit-service
+      - loan-service
+      - investment-service
+      - legacy-service
+      - crypto-service
+      - jaeger
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/healthz', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Prometheus (optional - for metrics)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bunnywallet-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    depends_on:
+      - aqs-service
+
+  # Grafana (optional - for visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bunnywallet-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  # Jaeger (distributed tracing)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: bunnywallet-jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP HTTP receiver
+      - "4317:4317"    # OTLP gRPC receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=info
+
+  # Frontend React Application
+  frontend:
+    build:
+      context: ./frontend/react-app
+      dockerfile: Dockerfile
+    container_name: bunnywallet-frontend
+    expose:
+      - "3000"
+    environment:
+      - VITE_API_BASE_URL=https://localhost/v1
+      - NODE_ENV=production
+    depends_on:
+      - aqs-service
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
