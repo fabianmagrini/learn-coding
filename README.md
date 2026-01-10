@@ -26,6 +26,12 @@ Full-stack application for content summarization and rewriting with real-time st
 - **Technology Stack**: React, TypeScript, Express.js, Vercel AI SDK, Tailwind CSS, Rsbuild, Multer, pdf-parse
 - **Architecture**: Vertical slice architecture by feature for better maintainability.
 
+#### **`typescript/pitchpulse/`** - Football News Aggregation Platform
+Cross-platform football news aggregation platform providing personalized, curated news feeds from thousands of sources.
+- **Features**: User authentication, personalized onboarding with team/league selection, RSS feed aggregation from top sources, keyword tagging for teams and players, personalized news feeds, reliability scoring for sources, responsive card-based UI, and monorepo structure with pnpm workspaces.
+- **Technology Stack**: React 18, TypeScript, Express.js, PostgreSQL, Redis, TanStack Query, Zustand, Tailwind CSS with shadcn/ui, rsbuild, Vitest, Storybook, Docker Compose
+- **Architecture**: Feature-based modules with frontend/backend separation, comprehensive testing, and component-driven development.
+
 #### **`typescript/json-query-kit/`** - Type-Safe JSON Data Manipulation
 Lightweight library for sorting, filtering, and paginating JSON data.
 - **Features**: Fluent API with method chaining, comprehensive filtering with AND/OR operators, flexible sorting (single-field, multi-field, custom functions), dual pagination support (page-based and offset-based), zero external dependencies, and full TypeScript type safety.
@@ -44,6 +50,12 @@ Fast CLI tool for converting Markdown to HTML.
 - **Features**: Containerization with Docker, structured logging, health checks, graceful shutdown, security best practices, and comprehensive testing strategies.
 - **Technology Stack**: Node.js, TypeScript, Express, OpenTelemetry, Pino, Jest, Docker Compose
 - **Architecture**: Two TypeScript microservices (products-service and orders-service) with Jaeger distributed tracing, Prometheus metrics collection, and Grafana visualization.
+
+#### **`nodejs/bunnywallet/`** - Multi-Account Financial Dashboard
+Demonstration of the Account Query Service (AQS) architecture pattern for aggregating financial account data from multiple backend systems.
+- **Features**: Adapter pattern for pluggable account types (Bank, Credit Card, Loan, Investment, Legacy), resilience patterns (circuit breakers, retries, timeouts, bulkheads), Redis caching with stale-while-revalidate strategy, partial results support when backends fail, comprehensive observability with Prometheus metrics and structured logging, NGINX API gateway with TLS termination and rate limiting, and 5 configurable mock services with simulation modes.
+- **Technology Stack**: Node.js 20+, TypeScript, Express, Redis, Cockatiel (resilience), Prometheus, Winston, NGINX, Docker Compose, Jest, Pact (contract testing)
+- **Architecture**: Account Query Service pattern with adapter registry, resilience layer per adapter, caching layer, and orchestrator for multi-account queries with NGINX gateway for production-grade security and performance.
 
 #### **`nodejs/mockingbird/`** - API Mocking Service
 Lightweight and flexible API mocking service for rapid prototyping, parallel development, and testing.
