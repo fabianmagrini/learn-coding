@@ -153,6 +153,3 @@ prometheus-data/
 # Local development overrides
 docker-compose.local.yml
 .env.local
-
-# Claude
-.claude/

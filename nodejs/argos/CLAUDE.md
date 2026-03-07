@@ -159,6 +159,14 @@ argos/
 └── CLAUDE.md                 # This file
 ```
 
+## Claude Code Skills
+
+Custom slash commands available in this project:
+
+| Command | Description |
+|---------|-------------|
+| `/observability-check` | Static audit of observability coverage — checks tracing, logging, metrics, health endpoints, Docker config, Prometheus scraping, and Grafana provisioning across all services |
+
 ## Development Workflow
 
 1. **Code changes**: Edit TypeScript files in src/
@@ -166,6 +174,7 @@ argos/
 3. **Building**: Use `npm run build` to verify TypeScript compilation
 4. **Integration**: Test with `docker-compose up` for full stack
 5. **Verification**: Check health endpoints and observability tools
+6. **Observability audit**: Run `/observability-check` when adding a new service or modifying observability config
 
 ## Best Practices Reminder
 
