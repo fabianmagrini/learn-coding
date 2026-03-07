@@ -166,6 +166,7 @@ Custom slash commands available in this project:
 | Command | Description |
 |---------|-------------|
 | `/observability-check` | Static audit of observability coverage — checks tracing, logging, metrics, health endpoints, Docker config, Prometheus scraping, and Grafana provisioning across all services |
+| `/resilience-check` | Static audit of resilience coverage — checks graceful shutdown, HTTP client timeouts, retry/circuit breaker libraries, input validation, error handling, resource limits, and README vs code consistency |
 
 ## Development Workflow
 
