@@ -68,3 +68,9 @@ Comprehensive chatbot system with seamless human escalation capabilities.
 - **Features**: AI-powered chat responses, real-time WebSocket communication, smart escalation triggers, operator dashboard, enterprise security with JWT authentication, comprehensive monitoring and alerting, and 200+ test coverage.
 - **Technology Stack**: TypeScript, React 18, tRPC, Node.js, Express, PostgreSQL, Prisma ORM, Redis, OpenAI API, Docker, Prometheus, Grafana
 - **Architecture**: Modern microservices with React frontends (customer and operator apps), Node.js BFF services, and shared business logic with integrated AI/LLM capabilities.
+
+#### **`nodejs/devfoundry/`** - AI-Native Engineering Platform
+Governed AI code generation platform at organisational scale, filling the gap between AI coding assistants and governed engineering systems.
+- **Features**: AI agent fleet (feature, test, refactor, security, dependency, PR reviewer), automated harness pipeline (build → test → lint → architecture → risk → policy → decision), risk tier classification, approval workflows, policy engine, DORA metrics, and engineering dashboard.
+- **Technology Stack**: TypeScript, NestJS, React 18, Vite, oclif CLI, Anthropic SDK (claude-sonnet-4-6), BullMQ, PostgreSQL, Redis, Tailwind CSS, TanStack Query, Turbo, Docker Compose
+- **Architecture**: Monorepo with pnpm workspaces — api, web, cli, and agents packages — with an Engineering Control Plane enforcing architecture rules and approval workflows over all AI-generated changes.
