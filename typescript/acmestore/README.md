@@ -44,6 +44,30 @@ The two features (products and checkout) are intentionally simple so the archite
 
 **Feature modules.** Both the BFF and the frontend are organised by feature (`product/`, `checkout/`), not by layer (`controllers/`, `services/`). Each feature owns its module, service, and tests with no cross-feature imports.
 
+### Deep vs shallow modules
+
+A **deep module** (Ousterhout, *A Philosophy of Software Design*) has a simple interface that hides substantial complexity. The benefit-to-interface-cost ratio is high. A **shallow module** has an interface nearly as complex as its implementation — useful for composing layers, but not for hiding complexity.
+
+This codebase has both, by design.
+
+**Deep modules — simple interface, meaningful hidden complexity:**
+
+| Module | Interface | What it hides |
+|--------|-----------|---------------|
+| `CheckoutService` | `getSummary(items)` | Parallel product fetches, `Decimal.js` precision arithmetic, subtotal calculations, `NotFoundException` on missing product |
+| `CartStore` (Zustand) | `addItem()`, `removeItem()`, `updateQuantity()`, `clearCart()` | Quantity merging on duplicate add, auto-removal at zero, localStorage persistence, immutable updates |
+| Zod schemas | `ProductSchema.parse(x)` | URL validation, string length bounds, numeric constraints, integer enforcement |
+
+**Shallow modules — intentionally thin adapters:**
+
+| Module | Why shallow is correct here |
+|--------|-----------------------------|
+| tRPC routers (`packages/api`) | Transport-layer wrappers; business logic belongs in services, not in routing |
+| tRPC client hooks (`apps/web`) | Thin adapters over TanStack Query; state management lives in the store |
+| `ProductService` | Simple interface over simple logic (array slice + Map lookup); thin by nature, not a design flaw |
+
+**Takeaway:** This repo is primarily a demonstration of **contract-first design and clean separation of concerns**. The deep module pattern appears clearly in `CheckoutService` and `CartStore`, and can be contrasted against the shallow routers and hooks to illustrate the spectrum. It is not a comprehensive demonstration of deep modules throughout — the features are intentionally simple to keep the architecture legible.
+
 ### What this repo does not demonstrate
 
 This is a demo with mocked data. A production codebase built on the same patterns would additionally need:
