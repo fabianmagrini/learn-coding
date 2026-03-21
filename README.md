@@ -43,6 +43,12 @@ Fast CLI tool for converting Markdown to HTML.
 - **Features**: Fast conversion powered by Bun runtime, single file or directory conversion, flexible output options, built-in styling, custom templates, CSS integration, and comprehensive test coverage.
 - **Technology Stack**: TypeScript, Bun, marked, meow
 
+#### **`typescript/acmestore/`** - Modular Full-Stack Reference Implementation
+Reference implementation demonstrating modular architecture patterns for a full-stack TypeScript web application.
+- **Features**: Product listing with pagination, product detail pages, cart management persisted to localStorage, checkout summary with simulated order placement, end-to-end type safety, and feature-based module organisation.
+- **Technology Stack**: React 18, TypeScript, Vite, React Router v7, TanStack Query, tRPC v11, Zod, Zustand, Tailwind CSS v3, NestJS, Turborepo, pnpm workspaces, Playwright, Vitest
+- **Architecture**: Monorepo with contract-first API design — `packages/api` defines tRPC routers and Zod schemas shared between the NestJS BFF and React frontend, with feature modules (product, checkout) on both sides.
+
 ### Node.js
 
 #### **`nodejs/argos/`** - Production-Grade Microservices Application

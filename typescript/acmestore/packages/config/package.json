@@ -1,0 +1,8 @@
+{
+  "name": "@acme/config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./tsconfig": "./tsconfig.base.json"
+  }
+}
