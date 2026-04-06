@@ -43,6 +43,12 @@ Fast CLI tool for converting Markdown to HTML.
 - **Features**: Fast conversion powered by Bun runtime, single file or directory conversion, flexible output options, built-in styling, custom templates, CSS integration, and comprehensive test coverage.
 - **Technology Stack**: TypeScript, Bun, marked, meow
 
+#### **`typescript/flappy-bird-ai-learner/`** - Flappy Bird AI via Genetic Programming
+Interactive web app that evolves Flappy Bird–playing programs using Genetic Programming (GP).
+- **Features**: Real-time visualisation of evolving bird populations, explainable AI with readable expression trees (not neural networks), configurable population/mutation/depth parameters, speed control (1×–20×), best-bird replay, and SVG program tree inspector.
+- **Technology Stack**: React 18, TypeScript, Vite 6, Zustand 5, Recharts 2, Vitest, Web Workers
+- **Architecture**: Evolution loop runs headless in a Web Worker (tournament selection, subtree crossover, three mutation operators, elitism); main thread renders via `requestAnimationFrame` independently.
+
 #### **`typescript/acmestore/`** - Modular Full-Stack Reference Implementation
 Reference implementation demonstrating modular architecture patterns for a full-stack TypeScript web application.
 - **Features**: Product listing with pagination, product detail pages, cart management persisted to localStorage, checkout summary with simulated order placement, end-to-end type safety, and feature-based module organisation.
