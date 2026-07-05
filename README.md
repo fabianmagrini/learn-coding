@@ -55,6 +55,12 @@ Reference implementation demonstrating modular architecture patterns for a full-
 - **Technology Stack**: React 18, TypeScript, Vite, React Router v7, TanStack Query, tRPC v11, Zod, Zustand, Tailwind CSS v3, NestJS, Turborepo, pnpm workspaces, Playwright, Vitest
 - **Architecture**: Monorepo with contract-first API design — `packages/api` defines tRPC routers and Zod schemas shared between the NestJS BFF and React frontend, with feature modules (product, checkout) on both sides.
 
+#### **`typescript/pr-triage-agent/`** - GitHub PR Triage Bot (Eve Demo Agent)
+GitHub pull-request triage bot built on Eve, Vercel's filesystem-first agent framework, demonstrating auto-discovered agent capabilities.
+- **Features**: Diff-based PR risk scoring, review checklist with progressive-disclosure skills (loads a deeper security skill only when relevant), concise findings comments, automatic triage labelling, human-in-the-loop approval gate before submitting formal APPROVE/REQUEST_CHANGES reviews, multi-channel deploy (GitHub App webhooks + built-in HTTP), and scheduled autonomous stale-PR digest via cron.
+- **Technology Stack**: TypeScript, Eve (Vercel agent framework), Anthropic Claude (claude-sonnet-5), Zod, Node 24, GitHub REST API
+- **Architecture**: Filesystem-first design where every capability (tools, skills, channels, schedules) is a single auto-discovered file under `agent/` with no registry to keep in sync; sensitive actions gated by default and sessions durably parked while awaiting approval.
+
 ### Node.js
 
 #### **`nodejs/argos/`** - Production-Grade Microservices Application
