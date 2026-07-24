@@ -21,7 +21,8 @@ sitting, but it exercises the concepts that make Rust *Rust*.
 | **`Path` & structs** | `Source { name, contents }` pairs each file's text with its path for `grep -r`-style output |
 | **String building & slicing** | `highlight` uses `match_indices` + byte-range slices to wrap matches |
 | **ANSI colour** | matches (red), file names (magenta), and line numbers (green) via the `paint` helper |
-| **TTY detection** | `run` colours output only when stdout `is_terminal()`, staying plain when piped |
+| **Enums & `ValueEnum`** | `--color=auto\|always\|never` is a `ColorChoice` enum clap validates and lists in `--help` |
+| **TTY detection** | with `--color=auto` (default), `run` colours only when stdout `is_terminal()`, staying plain when piped |
 | **Pattern matching / `if let`** | `main.rs` handles the run error with `if let Err(e)` |
 | **Environment variables** | `IGNORE_CASE=true` toggles case-insensitive search (wired up by clap's `env`) |
 | **Unit testing** | `#[cfg(test)] mod tests` at the bottom of `src/lib.rs`, including clap-parsing and highlight tests |
@@ -78,6 +79,10 @@ cargo run -- --include='*.rs' --include='*.md' fn some/directory
 
 # Skip files with --exclude=GLOB (repeatable). Exclusions win over --include:
 cargo run -- --exclude='*_test.txt' fox some/directory
+
+# Force or disable colour regardless of whether output is a terminal:
+cargo run -- --color=always nobody poem.txt | cat   # keeps colour through the pipe
+cargo run -- --color=never nobody poem.txt          # plain, even in a terminal
 ```
 
 The `--` separates cargo's own flags from arguments passed to *your* program.
@@ -85,7 +90,8 @@ The `--` separates cargo's own flags from arguments passed to *your* program.
 When you run in a terminal, output is colourised like `grep`: the **match** in bold red,
 the **file name** in magenta, and the **line number** in green. Pipe the output somewhere
 (e.g. `| cat`, `> out.txt`) and all colouring is automatically dropped so the escape
-codes don't end up in your file.
+codes don't end up in your file. Override this with `--color=always` (force colour, even
+when piped) or `--color=never` (force plain); the default is `--color=auto`.
 
 Expected output:
 
@@ -117,15 +123,15 @@ some/directory/sub/two.txt:1
 cargo test
 ```
 
-Twenty-nine tests cover clap argument parsing (positional args, an optional file path,
-the `-i`, `-n`, and `-c` flags, repeatable `--include`/`--exclude`, a missing required
-`query`, and a `debug_assert` smoke test of the CLI definition), case-sensitive and
-case-insensitive search including 1-based line numbers, the empty-result case, ANSI match
-highlighting (wrapping, case-insensitive casing, multiple occurrences, and the
-no-match/empty-query cases), output formatting with optional file-name and line-number
-prefixes (plain and colourised), count formatting, and directory collection from a real
-temp directory (default `*.txt`, custom `--include` globs, `--exclude` filtering, and
-rejection of an invalid glob).
+Thirty-two tests cover clap argument parsing (positional args, an optional file path, the
+`-i`, `-n`, and `-c` flags, repeatable `--include`/`--exclude`, `--color` values and
+rejection of unknown ones, a missing required `query`, and a `debug_assert` smoke test of
+the CLI definition), case-sensitive and case-insensitive search including 1-based line
+numbers, the empty-result case, ANSI match highlighting (wrapping, case-insensitive
+casing, multiple occurrences, and the no-match/empty-query cases), output formatting with
+optional file-name and line-number prefixes (plain and colourised), count formatting, and
+directory collection from a real temp directory (default `*.txt`, custom `--include`
+globs, `--exclude` filtering, and rejection of an invalid glob).
 
 ## Suggested exercises (to keep learning)
 
@@ -143,9 +149,10 @@ rejection of an invalid glob).
 All five starter exercises are complete, plus a `-c`/`--count` flag (print only the
 number of matching lines per source, like `grep -c`), `--include=GLOB`/`--exclude=GLOB`
 file filters for directory searches (repeatable; include defaults to `*.txt`, exclusions
-win), and `grep`-style colourised output (magenta file names, green line numbers, red
-matches). Some natural next steps if you want to keep going: an invert-match flag (`-v`),
-a `--color=auto|always|never` override, or swapping the hand-rolled recursion for the
+win), `grep`-style colourised output (magenta file names, green line numbers, red
+matches), and a `--color=auto|always|never` override. Some natural next steps if you want
+to keep going: an invert-match flag (`-v`), a context flag (`-C N` to show surrounding
+lines), or swapping the hand-rolled recursion for the
 [`walkdir`](https://crates.io/crates/walkdir) crate.
 
 ## Project layout

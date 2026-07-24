@@ -17,6 +17,19 @@ const HIGHLIGHT_END: &str = RESET;
 const FILE_COLOR: &str = "\x1b[35m"; // magenta — file-name prefix
 const LINE_COLOR: &str = "\x1b[32m"; // green — line-number prefix
 
+/// When to colourise output. Deriving `clap::ValueEnum` restricts `--color` to
+/// exactly these values (clap lowercases the variant names to `auto`/`always`/
+/// `never`) and lists them in `--help` — no manual validation needed.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum ColorChoice {
+    /// Colour only when stdout is a terminal (the default)
+    Auto,
+    /// Always colour, even when piped or redirected
+    Always,
+    /// Never colour
+    Never,
+}
+
 // Holds the parsed command-line configuration.
 //
 // Deriving `clap::Parser` turns this struct *into* the CLI: each field becomes
@@ -69,6 +82,10 @@ pub struct Config {
     /// directory. Exclusions win over `--include`. E.g. `--exclude='*_test.txt'`
     #[arg(long, value_name = "GLOB")]
     pub exclude: Vec<String>,
+
+    /// When to colourise output: auto (a terminal), always, or never
+    #[arg(long, value_name = "WHEN", default_value = "auto")]
+    pub color: ColorChoice,
 }
 
 /// Runs the search and prints matching lines.
@@ -81,10 +98,14 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     // sources when the path is a directory. The `?` propagates any read error.
     let sources = collect_sources(config.file_path.as_deref(), &config.include, &config.exclude)?;
 
-    // Only emit colour codes when writing to a real terminal. If the output is
-    // piped into another program or redirected to a file, `is_terminal()` is
-    // false and we print plain text so the escape sequences don't pollute it.
-    let colorize = std::io::stdout().is_terminal();
+    // Decide whether to emit colour codes. `--color=always`/`never` force it;
+    // `auto` (the default) colours only when stdout is a real terminal, so piped
+    // or redirected output stays plain and free of escape sequences.
+    let colorize = match config.color {
+        ColorChoice::Always => true,
+        ColorChoice::Never => false,
+        ColorChoice::Auto => std::io::stdout().is_terminal(),
+    };
 
     for source in &sources {
         let results = if config.ignore_case {
@@ -393,6 +414,27 @@ mod tests {
         let config =
             Config::try_parse_from(["minigrep", "-c", "query", "file.txt"]).unwrap();
         assert!(config.count);
+    }
+
+    #[test]
+    fn color_defaults_to_auto() {
+        let config = Config::try_parse_from(["minigrep", "query"]).unwrap();
+        assert_eq!(config.color, ColorChoice::Auto);
+    }
+
+    #[test]
+    fn color_accepts_explicit_values() {
+        let never = Config::try_parse_from(["minigrep", "--color=never", "query"]).unwrap();
+        assert_eq!(never.color, ColorChoice::Never);
+
+        let always = Config::try_parse_from(["minigrep", "--color", "always", "query"]).unwrap();
+        assert_eq!(always.color, ColorChoice::Always);
+    }
+
+    #[test]
+    fn color_rejects_unknown_values() {
+        // `sometimes` is not one of the ValueEnum variants, so clap errors.
+        assert!(Config::try_parse_from(["minigrep", "--color=sometimes", "query"]).is_err());
     }
 
     #[test]
