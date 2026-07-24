@@ -6,11 +6,16 @@ use std::path::Path;
 use clap::Parser;
 use glob::Pattern;
 
-// ANSI escape sequences used to highlight matches in terminal output.
-// `\x1b[` starts a control sequence; `1;31` means "bold; red foreground"; `m`
-// ends it. `0` resets all styling back to normal.
-const HIGHLIGHT_START: &str = "\x1b[1;31m";
-const HIGHLIGHT_END: &str = "\x1b[0m";
+// ANSI escape sequences for colouring terminal output. `\x1b[` starts a control
+// sequence, the number picks the style (e.g. `1;31` = bold red, `35` = magenta,
+// `32` = green), and `m` ends it. `RESET` (`0`) clears styling back to normal;
+// every colour we open must be closed with it. Consts can build on each other,
+// so `HIGHLIGHT_END` is just an alias for `RESET`.
+const RESET: &str = "\x1b[0m";
+const HIGHLIGHT_START: &str = "\x1b[1;31m"; // bold red — the matched substring
+const HIGHLIGHT_END: &str = RESET;
+const FILE_COLOR: &str = "\x1b[35m"; // magenta — file-name prefix
+const LINE_COLOR: &str = "\x1b[32m"; // green — line-number prefix
 
 // Holds the parsed command-line configuration.
 //
@@ -87,7 +92,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         // directory search prints one count per file, zeros included) and skip
         // printing the lines themselves — line numbers and highlighting too.
         if config.count {
-            println!("{}", format_count(source.name.as_deref(), results.len()));
+            println!(
+                "{}",
+                format_count(source.name.as_deref(), results.len(), colorize)
+            );
             continue;
         }
 
@@ -101,7 +109,13 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
             println!(
                 "{}",
-                format_match(source.name.as_deref(), number, config.line_number, &text)
+                format_match(
+                    source.name.as_deref(),
+                    number,
+                    config.line_number,
+                    &text,
+                    colorize
+                )
             );
         }
     }
@@ -194,17 +208,34 @@ fn collect_matching_files(
     Ok(())
 }
 
+/// Wraps `s` in the ANSI `color` when `colorize` is true, otherwise returns it
+/// unchanged. Centralising the colour-vs-plain choice keeps the callers tidy.
+fn paint(colorize: bool, color: &str, s: &str) -> String {
+    if colorize {
+        format!("{color}{s}{RESET}")
+    } else {
+        s.to_string()
+    }
+}
+
 /// Formats one match line for output: an optional `name:` prefix (when
-/// searching a directory), an optional `number: ` prefix (with `-n`), then the
-/// matched text. Keeping this pure makes the output format easy to unit-test.
-fn format_match(name: Option<&str>, number: usize, show_number: bool, text: &str) -> String {
+/// searching a directory, in magenta), an optional `number: ` prefix (with
+/// `-n`, in green), then the matched text. `colorize` mirrors whether stdout is
+/// a terminal. Keeping this pure makes the output format easy to unit-test.
+fn format_match(
+    name: Option<&str>,
+    number: usize,
+    show_number: bool,
+    text: &str,
+    colorize: bool,
+) -> String {
     let mut out = String::new();
     if let Some(name) = name {
-        out.push_str(name);
+        out.push_str(&paint(colorize, FILE_COLOR, name));
         out.push(':');
     }
     if show_number {
-        out.push_str(&number.to_string());
+        out.push_str(&paint(colorize, LINE_COLOR, &number.to_string()));
         out.push_str(": ");
     }
     out.push_str(text);
@@ -212,10 +243,11 @@ fn format_match(name: Option<&str>, number: usize, show_number: bool, text: &str
 }
 
 /// Formats a count line for `--count` mode: `name:count` when searching a
-/// directory (so each file's tally is labelled), or just the number otherwise.
-fn format_count(name: Option<&str>, count: usize) -> String {
+/// directory (so each file's tally is labelled, with the name in magenta when
+/// colourised), or just the number otherwise.
+fn format_count(name: Option<&str>, count: usize, colorize: bool) -> String {
     match name {
-        Some(name) => format!("{name}:{count}"),
+        Some(name) => format!("{}:{count}", paint(colorize, FILE_COLOR, name)),
         None => count.to_string(),
     }
 }
@@ -438,35 +470,56 @@ Trust me.";
 
     #[test]
     fn format_match_plain_is_just_the_text() {
-        assert_eq!(format_match(None, 3, false, "hello"), "hello");
+        assert_eq!(format_match(None, 3, false, "hello", false), "hello");
     }
 
     #[test]
     fn format_match_with_line_number() {
-        assert_eq!(format_match(None, 3, true, "hello"), "3: hello");
+        assert_eq!(format_match(None, 3, true, "hello", false), "3: hello");
     }
 
     #[test]
     fn format_match_with_file_name() {
-        assert_eq!(format_match(Some("a.txt"), 3, false, "hello"), "a.txt:hello");
+        assert_eq!(
+            format_match(Some("a.txt"), 3, false, "hello", false),
+            "a.txt:hello"
+        );
     }
 
     #[test]
     fn format_match_with_name_and_number() {
         assert_eq!(
-            format_match(Some("a.txt"), 3, true, "hello"),
+            format_match(Some("a.txt"), 3, true, "hello", false),
             "a.txt:3: hello"
         );
     }
 
     #[test]
+    fn format_match_colorizes_name_and_number() {
+        // Name in magenta, line number in green, each closed with a reset. The
+        // matched text is coloured separately by `highlight`, so it stays plain.
+        assert_eq!(
+            format_match(Some("a.txt"), 3, true, "hello", true),
+            format!("{FILE_COLOR}a.txt{RESET}:{LINE_COLOR}3{RESET}: hello")
+        );
+    }
+
+    #[test]
     fn format_count_plain_is_just_the_number() {
-        assert_eq!(format_count(None, 3), "3");
+        assert_eq!(format_count(None, 3, false), "3");
     }
 
     #[test]
     fn format_count_with_name_labels_the_file() {
-        assert_eq!(format_count(Some("a.txt"), 0), "a.txt:0");
+        assert_eq!(format_count(Some("a.txt"), 0, false), "a.txt:0");
+    }
+
+    #[test]
+    fn format_count_colorizes_the_file_name() {
+        assert_eq!(
+            format_count(Some("a.txt"), 2, true),
+            format!("{FILE_COLOR}a.txt{RESET}:2")
+        );
     }
 
     // Creates a fresh, uniquely-named directory under the system temp dir so

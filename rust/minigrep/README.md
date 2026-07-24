@@ -20,6 +20,7 @@ sitting, but it exercises the concepts that make Rust *Rust*.
 | **Using a crate + `collect` into `Result`** | `--include` globs are compiled with the `glob` crate; a bad pattern surfaces via `collect::<Result<_, _>>()?` |
 | **`Path` & structs** | `Source { name, contents }` pairs each file's text with its path for `grep -r`-style output |
 | **String building & slicing** | `highlight` uses `match_indices` + byte-range slices to wrap matches |
+| **ANSI colour** | matches (red), file names (magenta), and line numbers (green) via the `paint` helper |
 | **TTY detection** | `run` colours output only when stdout `is_terminal()`, staying plain when piped |
 | **Pattern matching / `if let`** | `main.rs` handles the run error with `if let Err(e)` |
 | **Environment variables** | `IGNORE_CASE=true` toggles case-insensitive search (wired up by clap's `env`) |
@@ -78,9 +79,10 @@ cargo run -- --include='*.rs' --include='*.md' fn some/directory
 
 The `--` separates cargo's own flags from arguments passed to *your* program.
 
-Matches are highlighted in **bold red** when you run in a terminal. Pipe the output
-somewhere (e.g. `| cat`, `> out.txt`) and the highlighting is automatically dropped so
-the escape codes don't end up in your file.
+When you run in a terminal, output is colourised like `grep`: the **match** in bold red,
+the **file name** in magenta, and the **line number** in green. Pipe the output somewhere
+(e.g. `| cat`, `> out.txt`) and all colouring is automatically dropped so the escape
+codes don't end up in your file.
 
 Expected output:
 
@@ -112,14 +114,14 @@ some/directory/sub/two.txt:1
 cargo test
 ```
 
-Twenty-five tests cover clap argument parsing (positional args, an optional file path, the
-`-i`, `-n`, and `-c` flags, repeatable `--include`, a missing required `query`, and a
+Twenty-seven tests cover clap argument parsing (positional args, an optional file path,
+the `-i`, `-n`, and `-c` flags, repeatable `--include`, a missing required `query`, and a
 `debug_assert` smoke test of the CLI definition), case-sensitive and case-insensitive
 search including 1-based line numbers, the empty-result case, ANSI match highlighting
 (wrapping, case-insensitive casing, multiple occurrences, and the no-match/empty-query
-cases), output formatting with optional file-name and line-number prefixes, count
-formatting, and directory collection from a real temp directory (default `*.txt`, custom
-`--include` globs, and rejection of an invalid glob).
+cases), output formatting with optional file-name and line-number prefixes (plain and
+colourised), count formatting, and directory collection from a real temp directory
+(default `*.txt`, custom `--include` globs, and rejection of an invalid glob).
 
 ## Suggested exercises (to keep learning)
 
@@ -135,10 +137,11 @@ formatting, and directory collection from a real temp directory (default `*.txt`
    `collect_txt_files` in `src/lib.rs`, with `grep -r`-style file-name prefixes.*
 
 All five starter exercises are complete, plus a `-c`/`--count` flag (print only the
-number of matching lines per source, like `grep -c`) and an `--include=GLOB` file filter
-for directory searches (repeatable; defaults to `*.txt`). Some natural next steps if you
-want to keep going: coloured **file names** as well as matches, an invert-match flag
-(`-v`), an `--exclude=GLOB` counterpart, or swapping the hand-rolled recursion for the
+number of matching lines per source, like `grep -c`), an `--include=GLOB` file filter for
+directory searches (repeatable; defaults to `*.txt`), and `grep`-style colourised output
+(magenta file names, green line numbers, red matches). Some natural next steps if you want
+to keep going: an invert-match flag (`-v`), an `--exclude=GLOB` counterpart, a
+`--color=auto|always|never` override, or swapping the hand-rolled recursion for the
 [`walkdir`](https://crates.io/crates/walkdir) crate.
 
 ## Project layout
