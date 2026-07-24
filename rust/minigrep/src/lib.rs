@@ -39,6 +39,10 @@ pub struct Config {
     // the field is a plain `bool`, the env var must be `true` or `false`.
     #[arg(short, long, env = "IGNORE_CASE")]
     pub ignore_case: bool,
+
+    /// Prefix each match with its 1-based line number
+    #[arg(short = 'n', long)]
+    pub line_number: bool,
 }
 
 /// Runs the search and prints matching lines.
@@ -62,11 +66,18 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     // false and we print plain text so the escape sequences don't pollute it.
     let colorize = std::io::stdout().is_terminal();
 
-    for line in results {
-        if colorize {
-            println!("{}", highlight(line, &config.query, config.ignore_case));
+    // Destructure each `(number, line)` tuple right in the `for` pattern.
+    for (number, line) in results {
+        let text = if colorize {
+            highlight(line, &config.query, config.ignore_case)
         } else {
-            println!("{line}");
+            line.to_string()
+        };
+
+        if config.line_number {
+            println!("{number}: {text}");
+        } else {
+            println!("{text}");
         }
     }
 
@@ -133,25 +144,31 @@ pub fn highlight(line: &str, query: &str, ignore_case: bool) -> String {
     result
 }
 
-/// Returns every line in `contents` that contains `query`.
+/// Returns every line in `contents` that contains `query`, paired with its
+/// 1-based line number.
 ///
 /// The returned slices borrow from `contents`, so the lifetime `'a` ties the
 /// output to the input — the borrow checker guarantees we never return
-/// references into freed memory.
-pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+/// references into freed memory. `enumerate` yields 0-based indices, so we add
+/// 1 to match the numbering people expect from editors and `grep -n`.
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<(usize, &'a str)> {
     contents
         .lines()
-        .filter(|line| line.contains(query))
+        .enumerate()
+        .filter(|(_, line)| line.contains(query))
+        .map(|(i, line)| (i + 1, line))
         .collect()
 }
 
 /// Case-insensitive variant of [`search`].
-pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<(usize, &'a str)> {
     let query = query.to_lowercase();
 
     contents
         .lines()
-        .filter(|line| line.to_lowercase().contains(&query))
+        .enumerate()
+        .filter(|(_, line)| line.to_lowercase().contains(&query))
+        .map(|(i, line)| (i + 1, line))
         .collect()
 }
 
@@ -193,6 +210,13 @@ mod tests {
     }
 
     #[test]
+    fn line_number_flag_sets_true() {
+        let config =
+            Config::try_parse_from(["minigrep", "-n", "query", "file.txt"]).unwrap();
+        assert!(config.line_number);
+    }
+
+    #[test]
     fn missing_query_is_an_error() {
         // `query` is required, so no positionals at all is a usage error that
         // clap reports itself. (A lone `query` is now valid — it reads stdin.)
@@ -208,7 +232,8 @@ safe, fast, productive.
 Pick three.
 Duct tape.";
 
-        assert_eq!(vec!["safe, fast, productive."], search(query, contents));
+        // "productive." is on line 2, so we expect the pair (2, ...).
+        assert_eq!(vec![(2, "safe, fast, productive.")], search(query, contents));
     }
 
     #[test]
@@ -220,8 +245,9 @@ safe, fast, productive.
 Pick three.
 Trust me.";
 
+        // Matches on lines 1 ("Rust:") and 4 ("Trust me."); numbers are 1-based.
         assert_eq!(
-            vec!["Rust:", "Trust me."],
+            vec![(1, "Rust:"), (4, "Trust me.")],
             search_case_insensitive(query, contents)
         );
     }

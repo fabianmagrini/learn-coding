@@ -12,7 +12,8 @@ sitting, but it exercises the concepts that make Rust *Rust*.
 | **`Result` & the `?` operator** | `run` in `src/lib.rs` returns `Result` and uses `?` to propagate file-read errors |
 | **Structs & derive macros** | `Config` derives `clap::Parser`, turning the struct into the CLI definition |
 | **CLI parsing with a crate** | `clap` provides argument parsing, `--help`/`--version`, and error handling — see `Config` in `src/lib.rs` |
-| **Iterators & closures** | `.lines().filter(...).collect()` is idiomatic iterator style |
+| **Iterators & closures** | `.lines().enumerate().filter(...).map(...).collect()` is idiomatic iterator style |
+| **Tuples & destructuring** | `search` returns `Vec<(usize, &str)>`; `run` unpacks `(number, line)` in the `for` pattern |
 | **`Option` & `match`** | `file_path: Option<String>`; `read_input` matches `Some(path)` vs `None` (stdin) |
 | **Traits (`Read`)** | `read_input` reads stdin via `std::io::stdin().read_to_string(...)` |
 | **String building & slicing** | `highlight` uses `match_indices` + byte-range slices to wrap matches |
@@ -54,6 +55,9 @@ IGNORE_CASE=true cargo run -- who poem.txt
 
 # Omit the file path to read from standard input — pipe text in:
 cat poem.txt | cargo run -- -i who
+
+# Show 1-based line numbers with -n / --line-number (combine flags, e.g. -ni):
+cargo run -- -n nobody poem.txt
 ```
 
 The `--` separates cargo's own flags from arguments passed to *your* program.
@@ -71,6 +75,10 @@ Are you nobody, too?
 
 $ cargo run -- -i who poem.txt
 I'm nobody! Who are you?
+
+$ cargo run -- -n nobody poem.txt
+1: I'm nobody! Who are you?
+2: Are you nobody, too?
 ```
 
 ## Test it
@@ -79,11 +87,11 @@ I'm nobody! Who are you?
 cargo test
 ```
 
-Thirteen tests cover clap argument parsing (positional args, an optional file path, the
-`-i` flag, a missing required `query`, and a `debug_assert` smoke test of the CLI
-definition), case-sensitive and case-insensitive search, the empty-result case, and ANSI
-match highlighting (wrapping, case-insensitive casing, multiple occurrences, and the
-no-match/empty-query cases).
+Fourteen tests cover clap argument parsing (positional args, an optional file path, the
+`-i` and `-n` flags, a missing required `query`, and a `debug_assert` smoke test of the
+CLI definition), case-sensitive and case-insensitive search including 1-based line
+numbers, the empty-result case, and ANSI match highlighting (wrapping, case-insensitive
+casing, multiple occurrences, and the no-match/empty-query cases).
 
 ## Suggested exercises (to keep learning)
 
@@ -93,7 +101,8 @@ no-match/empty-query cases).
    `highlight` in `src/lib.rs`, applied only when stdout is a terminal.*
 3. ✅ **Read from stdin** when no file path is given, so you can pipe into it
    (`cat poem.txt | minigrep who`). — *done; see `read_input` in `src/lib.rs`.*
-4. **Add a line-number flag** (`-n`) that prints `line_number: matched text`.
+4. ✅ **Add a line-number flag** (`-n`) that prints `line_number: matched text`. — *done;
+   `search` returns `(usize, &str)` pairs and `run` prefixes them when `-n` is set.*
 5. **Recurse into a directory**, searching every `.txt` file it finds.
 
 ## Project layout
