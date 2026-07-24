@@ -64,6 +64,11 @@ cargo run -- -n nobody poem.txt
 # Pass a directory to search every .txt file under it recursively; matches are
 # prefixed with the file path (like `grep -r`):
 cargo run -- -n fox some/directory
+
+# Print only a count of matching lines with -c / --count (per file in a
+# directory, like `grep -c`):
+cargo run -- -c nobody poem.txt
+cargo run -- -c fox some/directory
 ```
 
 The `--` separates cargo's own flags from arguments passed to *your* program.
@@ -89,6 +94,11 @@ $ cargo run -- -n nobody poem.txt
 $ cargo run -- -n fox some/directory
 some/directory/one.txt:1: the quick brown fox
 some/directory/sub/two.txt:1: another fox appears
+
+$ cargo run -- -c fox some/directory
+some/directory/empty.txt:0
+some/directory/one.txt:2
+some/directory/sub/two.txt:1
 ```
 
 ## Test it
@@ -97,13 +107,13 @@ some/directory/sub/two.txt:1: another fox appears
 cargo test
 ```
 
-Nineteen tests cover clap argument parsing (positional args, an optional file path, the
-`-i` and `-n` flags, a missing required `query`, and a `debug_assert` smoke test of the
-CLI definition), case-sensitive and case-insensitive search including 1-based line
+Twenty-two tests cover clap argument parsing (positional args, an optional file path, the
+`-i`, `-n`, and `-c` flags, a missing required `query`, and a `debug_assert` smoke test of
+the CLI definition), case-sensitive and case-insensitive search including 1-based line
 numbers, the empty-result case, ANSI match highlighting (wrapping, case-insensitive
 casing, multiple occurrences, and the no-match/empty-query cases), output formatting with
-optional file-name and line-number prefixes, and recursive `.txt` collection from a real
-temp directory.
+optional file-name and line-number prefixes, count formatting, and recursive `.txt`
+collection from a real temp directory.
 
 ## Suggested exercises (to keep learning)
 
@@ -118,10 +128,11 @@ temp directory.
 5. ✅ **Recurse into a directory**, searching every `.txt` file it finds. — *done; see
    `collect_txt_files` in `src/lib.rs`, with `grep -r`-style file-name prefixes.*
 
-All five starter exercises are complete. Some natural next steps if you want to keep
-going: a `-c`/`--count` flag (print only the number of matches), an `--include=GLOB`
-filter for which files to search, coloured **file names** as well as matches, or swapping
-the hand-rolled recursion for the [`walkdir`](https://crates.io/crates/walkdir) crate.
+All five starter exercises are complete, plus a `-c`/`--count` flag (print only the
+number of matching lines per source, like `grep -c`). Some natural next steps if you want
+to keep going: an `--include=GLOB` filter for which files to search, coloured **file
+names** as well as matches, an invert-match flag (`-v`), or swapping the hand-rolled
+recursion for the [`walkdir`](https://crates.io/crates/walkdir) crate.
 
 ## Project layout
 
@@ -131,7 +142,7 @@ rust/minigrep/
 ├── src/
 │   ├── main.rs     # thin CLI entry point (Config::parse + error exit code)
 │   └── lib.rs      # Config, run, collect_sources, collect_txt_files, format_match,
-│                   #   search, search_case_insensitive, highlight + tests
+│                   #   format_count, search, search_case_insensitive, highlight + tests
 ├── poem.txt        # sample input to search
 └── README.md
 ```

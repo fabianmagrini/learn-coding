@@ -45,6 +45,10 @@ pub struct Config {
     /// Prefix each match with its 1-based line number
     #[arg(short = 'n', long)]
     pub line_number: bool,
+
+    /// Print only a count of matching lines per source, not the lines themselves
+    #[arg(short, long)]
+    pub count: bool,
 }
 
 /// Runs the search and prints matching lines.
@@ -68,6 +72,14 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         } else {
             search(&config.query, &source.contents)
         };
+
+        // In count mode we report just how many lines matched (per source, so a
+        // directory search prints one count per file, zeros included) and skip
+        // printing the lines themselves — line numbers and highlighting too.
+        if config.count {
+            println!("{}", format_count(source.name.as_deref(), results.len()));
+            continue;
+        }
 
         // Destructure each `(number, line)` tuple right in the `for` pattern.
         for (number, line) in results {
@@ -165,6 +177,15 @@ fn format_match(name: Option<&str>, number: usize, show_number: bool, text: &str
     }
     out.push_str(text);
     out
+}
+
+/// Formats a count line for `--count` mode: `name:count` when searching a
+/// directory (so each file's tally is labelled), or just the number otherwise.
+fn format_count(name: Option<&str>, count: usize) -> String {
+    match name {
+        Some(name) => format!("{name}:{count}"),
+        None => count.to_string(),
+    }
 }
 
 /// Wraps every occurrence of `query` inside `line` with ANSI highlight codes,
@@ -282,6 +303,13 @@ mod tests {
     }
 
     #[test]
+    fn count_flag_sets_true() {
+        let config =
+            Config::try_parse_from(["minigrep", "-c", "query", "file.txt"]).unwrap();
+        assert!(config.count);
+    }
+
+    #[test]
     fn missing_query_is_an_error() {
         // `query` is required, so no positionals at all is a usage error that
         // clap reports itself. (A lone `query` is now valid — it reads stdin.)
@@ -384,6 +412,16 @@ Trust me.";
             format_match(Some("a.txt"), 3, true, "hello"),
             "a.txt:3: hello"
         );
+    }
+
+    #[test]
+    fn format_count_plain_is_just_the_number() {
+        assert_eq!(format_count(None, 3), "3");
+    }
+
+    #[test]
+    fn format_count_with_name_labels_the_file() {
+        assert_eq!(format_count(Some("a.txt"), 0), "a.txt:0");
     }
 
     // Creates a fresh, uniquely-named directory under the system temp dir so
