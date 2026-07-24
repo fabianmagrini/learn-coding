@@ -64,6 +64,11 @@ pub struct Config {
     // overwriting. `value_name` sets the placeholder shown in `--help`.
     #[arg(long, value_name = "GLOB")]
     pub include: Vec<String>,
+
+    /// Skip files whose name matches this glob (repeatable) when the path is a
+    /// directory. Exclusions win over `--include`. E.g. `--exclude='*_test.txt'`
+    #[arg(long, value_name = "GLOB")]
+    pub exclude: Vec<String>,
 }
 
 /// Runs the search and prints matching lines.
@@ -74,7 +79,7 @@ pub struct Config {
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     // Gather everything to search: one source for stdin/a single file, or many
     // sources when the path is a directory. The `?` propagates any read error.
-    let sources = collect_sources(config.file_path.as_deref(), &config.include)?;
+    let sources = collect_sources(config.file_path.as_deref(), &config.include, &config.exclude)?;
 
     // Only emit colour codes when writing to a real terminal. If the output is
     // piped into another program or redirected to a file, `is_terminal()` is
@@ -135,8 +140,13 @@ struct Source {
 /// - `None` → read standard input as a single, unnamed source.
 /// - a file → read it as a single, unnamed source (no filename prefix).
 /// - a directory → recursively collect files whose name matches one of the
-///   `include` globs (defaulting to `*.txt`), each named by path.
-fn collect_sources(path: Option<&str>, include: &[String]) -> Result<Vec<Source>, Box<dyn Error>> {
+///   `include` globs (defaulting to `*.txt`) and none of the `exclude` globs,
+///   each named by path.
+fn collect_sources(
+    path: Option<&str>,
+    include: &[String],
+    exclude: &[String],
+) -> Result<Vec<Source>, Box<dyn Error>> {
     match path {
         None => {
             let mut buffer = String::new();
@@ -154,7 +164,7 @@ fn collect_sources(path: Option<&str>, include: &[String]) -> Result<Vec<Source>
                 // fall back to `*.txt`. `collect::<Result<_, _>>()` turns an
                 // iterator of `Result`s into one `Result`, so a bad pattern (e.g.
                 // an unbalanced `[`) surfaces here via `?`.
-                let patterns: Vec<Pattern> = if include.is_empty() {
+                let includes: Vec<Pattern> = if include.is_empty() {
                     vec![Pattern::new("*.txt").expect("built-in default glob is valid")]
                 } else {
                     include
@@ -163,8 +173,14 @@ fn collect_sources(path: Option<&str>, include: &[String]) -> Result<Vec<Source>
                         .collect::<Result<_, _>>()?
                 };
 
+                // Exclusions have no default — an empty list excludes nothing.
+                let excludes: Vec<Pattern> = exclude
+                    .iter()
+                    .map(|glob| Pattern::new(glob))
+                    .collect::<Result<_, _>>()?;
+
                 let mut sources = Vec::new();
-                collect_matching_files(Path::new(path), &patterns, &mut sources)?;
+                collect_matching_files(Path::new(path), &includes, &excludes, &mut sources)?;
                 // Sort by path so output order is stable across runs (directory
                 // iteration order is otherwise unspecified by the OS).
                 sources.sort_by(|a, b| a.name.cmp(&b.name));
@@ -180,24 +196,30 @@ fn collect_sources(path: Option<&str>, include: &[String]) -> Result<Vec<Source>
 }
 
 /// Recursively walks `dir`, pushing a [`Source`] for every file whose name
-/// matches one of `patterns` into `out`. Recursion mirrors the directory tree;
-/// each nested folder is visited by calling this function again.
+/// matches one of `includes` and none of `excludes` into `out`. Recursion
+/// mirrors the directory tree; each nested folder is visited by calling this
+/// function again.
 ///
 /// (For simplicity this follows symlinks and does not guard against symlink
 /// cycles — fine for a learning demo, but something a real tool would handle.)
 fn collect_matching_files(
     dir: &Path,
-    patterns: &[Pattern],
+    includes: &[Pattern],
+    excludes: &[Pattern],
     out: &mut Vec<Source>,
 ) -> Result<(), Box<dyn Error>> {
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
         if path.is_dir() {
-            collect_matching_files(&path, patterns, out)?;
+            collect_matching_files(&path, includes, excludes, out)?;
         } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
             // Glob matching is done on the file name alone (not the full path),
-            // so `*.rs` matches `src/lib.rs` by its `lib.rs` component.
-            if patterns.iter().any(|pattern| pattern.matches(name)) {
+            // so `*.rs` matches `src/lib.rs` by its `lib.rs` component. A file is
+            // kept only when it matches an include and no exclude — exclusions
+            // take precedence, mirroring `grep`.
+            let included = includes.iter().any(|pattern| pattern.matches(name));
+            let excluded = excludes.iter().any(|pattern| pattern.matches(name));
+            if included && !excluded {
                 out.push(Source {
                     name: Some(path.display().to_string()),
                     contents: fs::read_to_string(&path)?,
@@ -394,6 +416,19 @@ mod tests {
     }
 
     #[test]
+    fn exclude_flag_collects_repeated_values() {
+        let config = Config::try_parse_from([
+            "minigrep",
+            "--exclude=*_test.txt",
+            "--exclude=*.min.js",
+            "query",
+            "some_dir",
+        ])
+        .unwrap();
+        assert_eq!(config.exclude, vec!["*_test.txt", "*.min.js"]);
+    }
+
+    #[test]
     fn case_sensitive() {
         let query = "duct";
         let contents = "\
@@ -546,7 +581,7 @@ Trust me.";
         std::fs::write(sub.join("b.txt"), "bravo\n").unwrap();
 
         // Empty `include` means "use the default glob", which is `*.txt`.
-        let sources = collect_sources(Some(root.to_str().unwrap()), &[]).unwrap();
+        let sources = collect_sources(Some(root.to_str().unwrap()), &[], &[]).unwrap();
         let names: Vec<String> = sources.iter().filter_map(|s| s.name.clone()).collect();
 
         // Two `.txt` files (one nested); the `.md` file is excluded.
@@ -567,7 +602,7 @@ Trust me.";
 
         // Include only `.md` and `.log`; `.txt` should now be skipped.
         let include = vec!["*.md".to_string(), "*.log".to_string()];
-        let sources = collect_sources(Some(root.to_str().unwrap()), &include).unwrap();
+        let sources = collect_sources(Some(root.to_str().unwrap()), &include, &[]).unwrap();
         let names: Vec<String> = sources.iter().filter_map(|s| s.name.clone()).collect();
 
         assert_eq!(names.len(), 2);
@@ -583,7 +618,25 @@ Trust me.";
         let root = unique_temp_dir();
         // `[` opens a character class that is never closed — an invalid pattern.
         let include = vec!["*.[".to_string()];
-        assert!(collect_sources(Some(root.to_str().unwrap()), &include).is_err());
+        assert!(collect_sources(Some(root.to_str().unwrap()), &include, &[]).is_err());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn collect_sources_applies_exclude_globs() {
+        let root = unique_temp_dir();
+        std::fs::write(root.join("keep.txt"), "a\n").unwrap();
+        std::fs::write(root.join("notes_test.txt"), "b\n").unwrap();
+
+        // Default include (`*.txt`) picks up both, but the exclude drops the
+        // `*_test.txt` file — exclusions take precedence over includes.
+        let exclude = vec!["*_test.txt".to_string()];
+        let sources = collect_sources(Some(root.to_str().unwrap()), &[], &exclude).unwrap();
+        let names: Vec<String> = sources.iter().filter_map(|s| s.name.clone()).collect();
+
+        assert_eq!(names.len(), 1);
+        assert!(names[0].ends_with("keep.txt"));
+
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

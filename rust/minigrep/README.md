@@ -75,6 +75,9 @@ cargo run -- -c fox some/directory
 # Choose which files a directory search reads with --include=GLOB (defaults to
 # *.txt; repeatable). Matches on the file name, so `*.rs` matches src/lib.rs:
 cargo run -- --include='*.rs' --include='*.md' fn some/directory
+
+# Skip files with --exclude=GLOB (repeatable). Exclusions win over --include:
+cargo run -- --exclude='*_test.txt' fox some/directory
 ```
 
 The `--` separates cargo's own flags from arguments passed to *your* program.
@@ -114,14 +117,15 @@ some/directory/sub/two.txt:1
 cargo test
 ```
 
-Twenty-seven tests cover clap argument parsing (positional args, an optional file path,
-the `-i`, `-n`, and `-c` flags, repeatable `--include`, a missing required `query`, and a
-`debug_assert` smoke test of the CLI definition), case-sensitive and case-insensitive
-search including 1-based line numbers, the empty-result case, ANSI match highlighting
-(wrapping, case-insensitive casing, multiple occurrences, and the no-match/empty-query
-cases), output formatting with optional file-name and line-number prefixes (plain and
-colourised), count formatting, and directory collection from a real temp directory
-(default `*.txt`, custom `--include` globs, and rejection of an invalid glob).
+Twenty-nine tests cover clap argument parsing (positional args, an optional file path,
+the `-i`, `-n`, and `-c` flags, repeatable `--include`/`--exclude`, a missing required
+`query`, and a `debug_assert` smoke test of the CLI definition), case-sensitive and
+case-insensitive search including 1-based line numbers, the empty-result case, ANSI match
+highlighting (wrapping, case-insensitive casing, multiple occurrences, and the
+no-match/empty-query cases), output formatting with optional file-name and line-number
+prefixes (plain and colourised), count formatting, and directory collection from a real
+temp directory (default `*.txt`, custom `--include` globs, `--exclude` filtering, and
+rejection of an invalid glob).
 
 ## Suggested exercises (to keep learning)
 
@@ -137,11 +141,11 @@ colourised), count formatting, and directory collection from a real temp directo
    `collect_txt_files` in `src/lib.rs`, with `grep -r`-style file-name prefixes.*
 
 All five starter exercises are complete, plus a `-c`/`--count` flag (print only the
-number of matching lines per source, like `grep -c`), an `--include=GLOB` file filter for
-directory searches (repeatable; defaults to `*.txt`), and `grep`-style colourised output
-(magenta file names, green line numbers, red matches). Some natural next steps if you want
-to keep going: an invert-match flag (`-v`), an `--exclude=GLOB` counterpart, a
-`--color=auto|always|never` override, or swapping the hand-rolled recursion for the
+number of matching lines per source, like `grep -c`), `--include=GLOB`/`--exclude=GLOB`
+file filters for directory searches (repeatable; include defaults to `*.txt`, exclusions
+win), and `grep`-style colourised output (magenta file names, green line numbers, red
+matches). Some natural next steps if you want to keep going: an invert-match flag (`-v`),
+a `--color=auto|always|never` override, or swapping the hand-rolled recursion for the
 [`walkdir`](https://crates.io/crates/walkdir) crate.
 
 ## Project layout
