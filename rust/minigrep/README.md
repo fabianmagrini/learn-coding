@@ -1,14 +1,26 @@
 # minigrep
 
-A tiny `grep` clone in Rust — the canonical "first real Rust project." It searches a
-file for lines containing a query string and prints them. Small enough to read in one
-sitting, but it exercises the concepts that make Rust *Rust*.
+A small `grep` clone in Rust — the canonical "first real Rust project," grown into a
+capable little search tool. It started as a ~20-line file reader and now searches files,
+directories, and standard input with the kind of ergonomics you'd expect from `grep`
+itself. Small enough to read in one sitting, it exercises the concepts that make Rust
+*Rust*.
+
+## Features
+
+- **Search** a file, a directory (recursively), or standard input (`cat file | minigrep …`).
+- **Case-insensitive** matching with `-i`/`--ignore-case` (or `IGNORE_CASE=true`).
+- **Line numbers** with `-n`/`--line-number`.
+- **Count mode** with `-c`/`--count` — matches per source, like `grep -c`.
+- **Directory filters** `--include=GLOB` (defaults to `*.txt`) and `--exclude=GLOB`, both repeatable; exclusions win.
+- **`grep`-style colour** — red matches, magenta file names, green line numbers — with a `--color=auto|always|never` override.
+- **Auto-generated `--help`/`--version`** and clean, friendly error messages.
 
 ## What this demo teaches
 
 | Concept | Where to look |
 | --- | --- |
-| **Ownership & borrowing** | `search` returns `Vec<&'a str>` — slices that borrow from the file contents, tied together by the lifetime `'a` |
+| **Ownership & borrowing** | `search` returns borrowed slices (`&'a str`) tied to the file contents by the lifetime `'a`, so matching copies no text |
 | **`Result` & the `?` operator** | `run` in `src/lib.rs` returns `Result` and uses `?` to propagate file-read errors |
 | **Structs & derive macros** | `Config` derives `clap::Parser`, turning the struct into the CLI definition |
 | **CLI parsing with a crate** | `clap` provides argument parsing, `--help`/`--version`, and error handling — see `Config` in `src/lib.rs` |
@@ -123,37 +135,23 @@ some/directory/sub/two.txt:1
 cargo test
 ```
 
-Thirty-two tests cover clap argument parsing (positional args, an optional file path, the
-`-i`, `-n`, and `-c` flags, repeatable `--include`/`--exclude`, `--color` values and
-rejection of unknown ones, a missing required `query`, and a `debug_assert` smoke test of
-the CLI definition), case-sensitive and case-insensitive search including 1-based line
-numbers, the empty-result case, ANSI match highlighting (wrapping, case-insensitive
-casing, multiple occurrences, and the no-match/empty-query cases), output formatting with
-optional file-name and line-number prefixes (plain and colourised), count formatting, and
-directory collection from a real temp directory (default `*.txt`, custom `--include`
-globs, `--exclude` filtering, and rejection of an invalid glob).
+Thirty-two tests cover four areas:
 
-## Suggested exercises (to keep learning)
+- **Argument parsing** — every flag, the optional file path, invalid values, and a `debug_assert` smoke test of the CLI definition.
+- **Search** — case-sensitive and case-insensitive matching with 1-based line numbers, plus the empty-result case.
+- **Output formatting** — file-name and line-number prefixes, ANSI highlighting, and count mode, in both plain and colourised forms.
+- **Directory collection** — recursion over a real temp directory with the default glob, custom `--include`/`--exclude` globs, and rejection of an invalid pattern.
 
-1. ✅ **Add real argument parsing** with the [`clap`](https://crates.io/crates/clap)
-   crate instead of indexing `args`. — *done; see `Config` in `src/lib.rs`.*
-2. ✅ **Highlight the match** in each printed line using ANSI colour codes. — *done; see
-   `highlight` in `src/lib.rs`, applied only when stdout is a terminal.*
-3. ✅ **Read from stdin** when no file path is given, so you can pipe into it
-   (`cat poem.txt | minigrep who`). — *done; see `collect_sources` in `src/lib.rs`.*
-4. ✅ **Add a line-number flag** (`-n`) that prints `line_number: matched text`. — *done;
-   `search` returns `(usize, &str)` pairs and `run` prefixes them when `-n` is set.*
-5. ✅ **Recurse into a directory**, searching every `.txt` file it finds. — *done; see
-   `collect_txt_files` in `src/lib.rs`, with `grep -r`-style file-name prefixes.*
+## Ideas to keep learning
 
-All five starter exercises are complete, plus a `-c`/`--count` flag (print only the
-number of matching lines per source, like `grep -c`), `--include=GLOB`/`--exclude=GLOB`
-file filters for directory searches (repeatable; include defaults to `*.txt`, exclusions
-win), `grep`-style colourised output (magenta file names, green line numbers, red
-matches), and a `--color=auto|always|never` override. Some natural next steps if you want
-to keep going: an invert-match flag (`-v`), a context flag (`-C N` to show surrounding
-lines), or swapping the hand-rolled recursion for the
-[`walkdir`](https://crates.io/crates/walkdir) crate.
+This project began as the five exercises from [the Rust Book's I/O
+chapter](https://doc.rust-lang.org/book/ch12-00-an-io-project.html) — clap parsing, match
+highlighting, stdin, line numbers, and directory recursion — and grew from there. Good
+next steps:
+
+- **Invert match** (`-v`) — print the lines that *don't* match.
+- **Context lines** (`-C N`) — print N lines around each match.
+- **Swap the hand-rolled recursion** for the [`walkdir`](https://crates.io/crates/walkdir) crate.
 
 ## Project layout
 
