@@ -1,0 +1,15 @@
+[package]
+name = "minigrep"
+version = "0.1.0"
+edition = "2021"
+description = "A tiny grep clone — a first idiomatic Rust project"
+
+[[bin]]
+name = "minigrep"
+path = "src/main.rs"
+
+[lib]
+name = "minigrep"
+path = "src/lib.rs"
+
+[dependencies]
