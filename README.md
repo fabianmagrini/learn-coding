@@ -97,6 +97,6 @@ Governed AI code generation platform at organisational scale, filling the gap be
 
 #### **`rust/minigrep/`** - Tiny grep Clone (Rust Starter Project)
 The canonical first Rust project — a command-line tool that searches a file for lines containing a query string.
-- **Features**: Case-sensitive and case-insensitive line search (via a `-i`/`--ignore-case` flag or the `IGNORE_CASE` env var), auto-generated `--help`/`--version`, friendly error handling with clean exit codes, and a suite of unit tests; designed as a hands-on introduction to Rust's core concepts.
+- **Features**: Case-sensitive and case-insensitive line search (via a `-i`/`--ignore-case` flag or the `IGNORE_CASE` env var), ANSI bold-red highlighting of matches when writing to a terminal (auto-disabled when piped), auto-generated `--help`/`--version`, friendly error handling with clean exit codes, and a suite of unit tests; designed as a hands-on introduction to Rust's core concepts.
 - **Technology Stack**: Rust, Cargo, clap (derive-based CLI parsing)
-- **Architecture**: Standard Rust CLI layout with a thin binary (`src/main.rs`) over a testable library (`src/lib.rs`), demonstrating ownership and borrowing (lifetime-annotated string slices), `Result`/`?` error propagation, a `clap::Parser`-derived config struct, iterators and closures, and built-in `#[cfg(test)]` unit testing.
+- **Architecture**: Standard Rust CLI layout with a thin binary (`src/main.rs`) over a testable library (`src/lib.rs`), demonstrating ownership and borrowing (lifetime-annotated string slices), `Result`/`?` error propagation, a `clap::Parser`-derived config struct, iterators and closures, TTY-aware output via `IsTerminal`, and built-in `#[cfg(test)]` unit testing.

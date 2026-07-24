@@ -13,9 +13,11 @@ sitting, but it exercises the concepts that make Rust *Rust*.
 | **Structs & derive macros** | `Config` derives `clap::Parser`, turning the struct into the CLI definition |
 | **CLI parsing with a crate** | `clap` provides argument parsing, `--help`/`--version`, and error handling — see `Config` in `src/lib.rs` |
 | **Iterators & closures** | `.lines().filter(...).collect()` is idiomatic iterator style |
+| **String building & slicing** | `highlight` uses `match_indices` + byte-range slices to wrap matches |
+| **TTY detection** | `run` colours output only when stdout `is_terminal()`, staying plain when piped |
 | **Pattern matching / `if let`** | `main.rs` handles the run error with `if let Err(e)` |
 | **Environment variables** | `IGNORE_CASE=true` toggles case-insensitive search (wired up by clap's `env`) |
-| **Unit testing** | `#[cfg(test)] mod tests` at the bottom of `src/lib.rs`, including clap-parsing tests |
+| **Unit testing** | `#[cfg(test)] mod tests` at the bottom of `src/lib.rs`, including clap-parsing and highlight tests |
 | **lib + bin split** | Logic lives in `src/lib.rs` (testable); `src/main.rs` is a thin wrapper |
 
 ## Prerequisites
@@ -51,6 +53,10 @@ IGNORE_CASE=true cargo run -- who poem.txt
 
 The `--` separates cargo's own flags from arguments passed to *your* program.
 
+Matches are highlighted in **bold red** when you run in a terminal. Pipe the output
+somewhere (e.g. `| cat`, `> out.txt`) and the highlighting is automatically dropped so
+the escape codes don't end up in your file.
+
 Expected output:
 
 ```
@@ -68,15 +74,17 @@ I'm nobody! Who are you?
 cargo test
 ```
 
-Seven tests cover clap argument parsing (positional args, the `-i` flag, a missing
+Twelve tests cover clap argument parsing (positional args, the `-i` flag, a missing
 argument, and a `debug_assert` smoke test of the CLI definition), case-sensitive and
-case-insensitive search, and the empty-result case.
+case-insensitive search, the empty-result case, and ANSI match highlighting (wrapping,
+case-insensitive casing, multiple occurrences, and the no-match/empty-query cases).
 
 ## Suggested exercises (to keep learning)
 
 1. ✅ **Add real argument parsing** with the [`clap`](https://crates.io/crates/clap)
    crate instead of indexing `args`. — *done; see `Config` in `src/lib.rs`.*
-2. **Highlight the match** in each printed line using ANSI colour codes.
+2. ✅ **Highlight the match** in each printed line using ANSI colour codes. — *done; see
+   `highlight` in `src/lib.rs`, applied only when stdout is a terminal.*
 3. **Read from stdin** when no file path is given, so you can pipe into it: `cat poem.txt | minigrep who`.
 4. **Add a line-number flag** (`-n`) that prints `line_number: matched text`.
 5. **Recurse into a directory**, searching every `.txt` file it finds.
@@ -88,7 +96,7 @@ rust/minigrep/
 ├── Cargo.toml      # package manifest + dependencies
 ├── src/
 │   ├── main.rs     # thin CLI entry point (Config::parse + error exit code)
-│   └── lib.rs      # Config (clap-derived), run, search, search_case_insensitive + tests
+│   └── lib.rs      # Config (clap-derived), run, search, search_case_insensitive, highlight + tests
 ├── poem.txt        # sample input to search
 └── README.md
 ```

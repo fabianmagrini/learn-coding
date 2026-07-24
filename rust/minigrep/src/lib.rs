@@ -1,7 +1,14 @@
 use std::error::Error;
 use std::fs;
+use std::io::IsTerminal;
 
 use clap::Parser;
+
+// ANSI escape sequences used to highlight matches in terminal output.
+// `\x1b[` starts a control sequence; `1;31` means "bold; red foreground"; `m`
+// ends it. `0` resets all styling back to normal.
+const HIGHLIGHT_START: &str = "\x1b[1;31m";
+const HIGHLIGHT_END: &str = "\x1b[0m";
 
 // Holds the parsed command-line configuration.
 //
@@ -45,11 +52,62 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         search(&config.query, &contents)
     };
 
+    // Only emit colour codes when writing to a real terminal. If the output is
+    // piped into another program or redirected to a file, `is_terminal()` is
+    // false and we print plain text so the escape sequences don't pollute it.
+    let colorize = std::io::stdout().is_terminal();
+
     for line in results {
-        println!("{line}");
+        if colorize {
+            println!("{}", highlight(line, &config.query, config.ignore_case));
+        } else {
+            println!("{line}");
+        }
     }
 
     Ok(())
+}
+
+/// Wraps every occurrence of `query` inside `line` with ANSI highlight codes,
+/// returning a new `String`. When `ignore_case` is set, matching is
+/// case-insensitive but the highlighted text keeps the line's original casing.
+///
+/// Returns the line unchanged when the query is empty or has no matches.
+pub fn highlight(line: &str, query: &str, ignore_case: bool) -> String {
+    if query.is_empty() {
+        return line.to_string();
+    }
+
+    // We search within a possibly-lowercased copy but always slice the ORIGINAL
+    // `line`, so the printed match preserves its real casing. This index mapping
+    // assumes lowercasing doesn't shift byte positions, which holds for ASCII —
+    // fine for a learning demo; a production tool would handle Unicode widths.
+    let haystack = if ignore_case {
+        line.to_lowercase()
+    } else {
+        line.to_string()
+    };
+    let needle = if ignore_case {
+        query.to_lowercase()
+    } else {
+        query.to_string()
+    };
+
+    let mut result = String::with_capacity(line.len());
+    let mut last = 0;
+
+    // `match_indices` yields the byte offset and text of each non-overlapping
+    // match, letting us stitch together "before + highlighted + after" segments.
+    for (start, matched) in haystack.match_indices(&needle) {
+        let end = start + matched.len();
+        result.push_str(&line[last..start]);
+        result.push_str(HIGHLIGHT_START);
+        result.push_str(&line[start..end]);
+        result.push_str(HIGHLIGHT_END);
+        last = end;
+    }
+    result.push_str(&line[last..]);
+    result
 }
 
 /// Returns every line in `contents` that contains `query`.
@@ -141,5 +199,44 @@ Trust me.";
         let query = "monomorphization";
         let contents = "just some plain text";
         assert!(search(query, contents).is_empty());
+    }
+
+    #[test]
+    fn highlight_wraps_a_match() {
+        assert_eq!(
+            highlight("productive", "duct", false),
+            format!("pro{HIGHLIGHT_START}duct{HIGHLIGHT_END}ive")
+        );
+    }
+
+    #[test]
+    fn highlight_keeps_original_casing_when_case_insensitive() {
+        // Query "rust" matches "Rust"; the highlighted text stays "Rust".
+        assert_eq!(
+            highlight("Rust rules", "rust", true),
+            format!("{HIGHLIGHT_START}Rust{HIGHLIGHT_END} rules")
+        );
+    }
+
+    #[test]
+    fn highlight_marks_every_occurrence() {
+        assert_eq!(
+            highlight("na na na", "na", false),
+            format!(
+                "{h}na{e} {h}na{e} {h}na{e}",
+                h = HIGHLIGHT_START,
+                e = HIGHLIGHT_END
+            )
+        );
+    }
+
+    #[test]
+    fn highlight_without_a_match_is_unchanged() {
+        assert_eq!(highlight("hello world", "xyz", false), "hello world");
+    }
+
+    #[test]
+    fn highlight_with_empty_query_is_unchanged() {
+        assert_eq!(highlight("hello world", "", false), "hello world");
     }
 }
