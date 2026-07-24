@@ -4,6 +4,7 @@ use std::io::{IsTerminal, Read};
 use std::path::Path;
 
 use clap::Parser;
+use glob::Pattern;
 
 // ANSI escape sequences used to highlight matches in terminal output.
 // `\x1b[` starts a control sequence; `1;31` means "bold; red foreground"; `m`
@@ -49,6 +50,15 @@ pub struct Config {
     /// Print only a count of matching lines per source, not the lines themselves
     #[arg(short, long)]
     pub count: bool,
+
+    /// Only search files whose name matches this glob (repeatable) when the path
+    /// is a directory; defaults to `*.txt`. E.g. `--include='*.rs' --include='*.md'`
+    //
+    // A `Vec<String>` field lets clap collect a repeated option into a list, so
+    // passing `--include` more than once accumulates patterns instead of
+    // overwriting. `value_name` sets the placeholder shown in `--help`.
+    #[arg(long, value_name = "GLOB")]
+    pub include: Vec<String>,
 }
 
 /// Runs the search and prints matching lines.
@@ -59,7 +69,7 @@ pub struct Config {
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     // Gather everything to search: one source for stdin/a single file, or many
     // sources when the path is a directory. The `?` propagates any read error.
-    let sources = collect_sources(config.file_path.as_deref())?;
+    let sources = collect_sources(config.file_path.as_deref(), &config.include)?;
 
     // Only emit colour codes when writing to a real terminal. If the output is
     // piped into another program or redirected to a file, `is_terminal()` is
@@ -110,8 +120,9 @@ struct Source {
 /// Builds the list of sources to search from the given path:
 /// - `None` → read standard input as a single, unnamed source.
 /// - a file → read it as a single, unnamed source (no filename prefix).
-/// - a directory → recursively collect every `.txt` file, each named by path.
-fn collect_sources(path: Option<&str>) -> Result<Vec<Source>, Box<dyn Error>> {
+/// - a directory → recursively collect files whose name matches one of the
+///   `include` globs (defaulting to `*.txt`), each named by path.
+fn collect_sources(path: Option<&str>, include: &[String]) -> Result<Vec<Source>, Box<dyn Error>> {
     match path {
         None => {
             let mut buffer = String::new();
@@ -125,8 +136,21 @@ fn collect_sources(path: Option<&str>) -> Result<Vec<Source>, Box<dyn Error>> {
         }
         Some(path) => {
             if fs::metadata(path)?.is_dir() {
+                // Compile the include globs once, up front. With none supplied we
+                // fall back to `*.txt`. `collect::<Result<_, _>>()` turns an
+                // iterator of `Result`s into one `Result`, so a bad pattern (e.g.
+                // an unbalanced `[`) surfaces here via `?`.
+                let patterns: Vec<Pattern> = if include.is_empty() {
+                    vec![Pattern::new("*.txt").expect("built-in default glob is valid")]
+                } else {
+                    include
+                        .iter()
+                        .map(|glob| Pattern::new(glob))
+                        .collect::<Result<_, _>>()?
+                };
+
                 let mut sources = Vec::new();
-                collect_txt_files(Path::new(path), &mut sources)?;
+                collect_matching_files(Path::new(path), &patterns, &mut sources)?;
                 // Sort by path so output order is stable across runs (directory
                 // iteration order is otherwise unspecified by the OS).
                 sources.sort_by(|a, b| a.name.cmp(&b.name));
@@ -141,22 +165,30 @@ fn collect_sources(path: Option<&str>) -> Result<Vec<Source>, Box<dyn Error>> {
     }
 }
 
-/// Recursively walks `dir`, pushing a [`Source`] for every `.txt` file found
-/// into `out`. Recursion mirrors the directory tree; each nested folder is
-/// visited by calling this function again.
+/// Recursively walks `dir`, pushing a [`Source`] for every file whose name
+/// matches one of `patterns` into `out`. Recursion mirrors the directory tree;
+/// each nested folder is visited by calling this function again.
 ///
 /// (For simplicity this follows symlinks and does not guard against symlink
 /// cycles — fine for a learning demo, but something a real tool would handle.)
-fn collect_txt_files(dir: &Path, out: &mut Vec<Source>) -> Result<(), Box<dyn Error>> {
+fn collect_matching_files(
+    dir: &Path,
+    patterns: &[Pattern],
+    out: &mut Vec<Source>,
+) -> Result<(), Box<dyn Error>> {
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
         if path.is_dir() {
-            collect_txt_files(&path, out)?;
-        } else if path.extension().and_then(|ext| ext.to_str()) == Some("txt") {
-            out.push(Source {
-                name: Some(path.display().to_string()),
-                contents: fs::read_to_string(&path)?,
-            });
+            collect_matching_files(&path, patterns, out)?;
+        } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            // Glob matching is done on the file name alone (not the full path),
+            // so `*.rs` matches `src/lib.rs` by its `lib.rs` component.
+            if patterns.iter().any(|pattern| pattern.matches(name)) {
+                out.push(Source {
+                    name: Some(path.display().to_string()),
+                    contents: fs::read_to_string(&path)?,
+                });
+            }
         }
     }
     Ok(())
@@ -317,6 +349,19 @@ mod tests {
     }
 
     #[test]
+    fn include_flag_collects_repeated_values() {
+        let config = Config::try_parse_from([
+            "minigrep",
+            "--include=*.rs",
+            "--include=*.md",
+            "query",
+            "some_dir",
+        ])
+        .unwrap();
+        assert_eq!(config.include, vec!["*.rs", "*.md"]);
+    }
+
+    #[test]
     fn case_sensitive() {
         let query = "duct";
         let contents = "\
@@ -439,7 +484,7 @@ Trust me.";
     }
 
     #[test]
-    fn collect_sources_recurses_txt_files_only() {
+    fn collect_sources_recurses_txt_files_by_default() {
         let root = unique_temp_dir();
         let sub = root.join("nested");
         std::fs::create_dir_all(&sub).unwrap();
@@ -447,7 +492,8 @@ Trust me.";
         std::fs::write(root.join("skip.md"), "ignored\n").unwrap();
         std::fs::write(sub.join("b.txt"), "bravo\n").unwrap();
 
-        let sources = collect_sources(Some(root.to_str().unwrap())).unwrap();
+        // Empty `include` means "use the default glob", which is `*.txt`.
+        let sources = collect_sources(Some(root.to_str().unwrap()), &[]).unwrap();
         let names: Vec<String> = sources.iter().filter_map(|s| s.name.clone()).collect();
 
         // Two `.txt` files (one nested); the `.md` file is excluded.
@@ -456,6 +502,35 @@ Trust me.";
         assert!(names.iter().any(|n| n.ends_with("b.txt")));
         assert!(names.iter().all(|n| !n.ends_with("skip.md")));
 
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn collect_sources_honours_include_globs() {
+        let root = unique_temp_dir();
+        std::fs::write(root.join("a.txt"), "alpha\n").unwrap();
+        std::fs::write(root.join("b.md"), "bravo\n").unwrap();
+        std::fs::write(root.join("c.log"), "charlie\n").unwrap();
+
+        // Include only `.md` and `.log`; `.txt` should now be skipped.
+        let include = vec!["*.md".to_string(), "*.log".to_string()];
+        let sources = collect_sources(Some(root.to_str().unwrap()), &include).unwrap();
+        let names: Vec<String> = sources.iter().filter_map(|s| s.name.clone()).collect();
+
+        assert_eq!(names.len(), 2);
+        assert!(names.iter().any(|n| n.ends_with("b.md")));
+        assert!(names.iter().any(|n| n.ends_with("c.log")));
+        assert!(names.iter().all(|n| !n.ends_with("a.txt")));
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn collect_sources_rejects_an_invalid_glob() {
+        let root = unique_temp_dir();
+        // `[` opens a character class that is never closed — an invalid pattern.
+        let include = vec!["*.[".to_string()];
+        assert!(collect_sources(Some(root.to_str().unwrap()), &include).is_err());
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

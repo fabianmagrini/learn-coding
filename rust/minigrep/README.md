@@ -16,7 +16,8 @@ sitting, but it exercises the concepts that make Rust *Rust*.
 | **Tuples & destructuring** | `search` returns `Vec<(usize, &str)>`; `run` unpacks `(number, line)` in the `for` pattern |
 | **`Option` & `match`** | `file_path: Option<String>`; `collect_sources` matches `Some(path)` vs `None` (stdin) |
 | **Traits (`Read`)** | `collect_sources` reads stdin via `std::io::stdin().read_to_string(...)` |
-| **Recursion & the filesystem** | `collect_txt_files` walks a directory tree with `fs::read_dir`, recursing into subfolders |
+| **Recursion & the filesystem** | `collect_matching_files` walks a directory tree with `fs::read_dir`, recursing into subfolders |
+| **Using a crate + `collect` into `Result`** | `--include` globs are compiled with the `glob` crate; a bad pattern surfaces via `collect::<Result<_, _>>()?` |
 | **`Path` & structs** | `Source { name, contents }` pairs each file's text with its path for `grep -r`-style output |
 | **String building & slicing** | `highlight` uses `match_indices` + byte-range slices to wrap matches |
 | **TTY detection** | `run` colours output only when stdout `is_terminal()`, staying plain when piped |
@@ -69,6 +70,10 @@ cargo run -- -n fox some/directory
 # directory, like `grep -c`):
 cargo run -- -c nobody poem.txt
 cargo run -- -c fox some/directory
+
+# Choose which files a directory search reads with --include=GLOB (defaults to
+# *.txt; repeatable). Matches on the file name, so `*.rs` matches src/lib.rs:
+cargo run -- --include='*.rs' --include='*.md' fn some/directory
 ```
 
 The `--` separates cargo's own flags from arguments passed to *your* program.
@@ -107,13 +112,14 @@ some/directory/sub/two.txt:1
 cargo test
 ```
 
-Twenty-two tests cover clap argument parsing (positional args, an optional file path, the
-`-i`, `-n`, and `-c` flags, a missing required `query`, and a `debug_assert` smoke test of
-the CLI definition), case-sensitive and case-insensitive search including 1-based line
-numbers, the empty-result case, ANSI match highlighting (wrapping, case-insensitive
-casing, multiple occurrences, and the no-match/empty-query cases), output formatting with
-optional file-name and line-number prefixes, count formatting, and recursive `.txt`
-collection from a real temp directory.
+Twenty-five tests cover clap argument parsing (positional args, an optional file path, the
+`-i`, `-n`, and `-c` flags, repeatable `--include`, a missing required `query`, and a
+`debug_assert` smoke test of the CLI definition), case-sensitive and case-insensitive
+search including 1-based line numbers, the empty-result case, ANSI match highlighting
+(wrapping, case-insensitive casing, multiple occurrences, and the no-match/empty-query
+cases), output formatting with optional file-name and line-number prefixes, count
+formatting, and directory collection from a real temp directory (default `*.txt`, custom
+`--include` globs, and rejection of an invalid glob).
 
 ## Suggested exercises (to keep learning)
 
@@ -129,10 +135,11 @@ collection from a real temp directory.
    `collect_txt_files` in `src/lib.rs`, with `grep -r`-style file-name prefixes.*
 
 All five starter exercises are complete, plus a `-c`/`--count` flag (print only the
-number of matching lines per source, like `grep -c`). Some natural next steps if you want
-to keep going: an `--include=GLOB` filter for which files to search, coloured **file
-names** as well as matches, an invert-match flag (`-v`), or swapping the hand-rolled
-recursion for the [`walkdir`](https://crates.io/crates/walkdir) crate.
+number of matching lines per source, like `grep -c`) and an `--include=GLOB` file filter
+for directory searches (repeatable; defaults to `*.txt`). Some natural next steps if you
+want to keep going: coloured **file names** as well as matches, an invert-match flag
+(`-v`), an `--exclude=GLOB` counterpart, or swapping the hand-rolled recursion for the
+[`walkdir`](https://crates.io/crates/walkdir) crate.
 
 ## Project layout
 
@@ -141,7 +148,7 @@ rust/minigrep/
 ├── Cargo.toml      # package manifest + dependencies
 ├── src/
 │   ├── main.rs     # thin CLI entry point (Config::parse + error exit code)
-│   └── lib.rs      # Config, run, collect_sources, collect_txt_files, format_match,
+│   └── lib.rs      # Config, run, collect_sources, collect_matching_files, format_match,
 │                   #   format_count, search, search_case_insensitive, highlight + tests
 ├── poem.txt        # sample input to search
 └── README.md
