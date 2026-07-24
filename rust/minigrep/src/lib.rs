@@ -1,43 +1,33 @@
-use std::env;
 use std::error::Error;
 use std::fs;
 
-/// Holds the parsed command-line configuration.
-///
-/// `query` is what we search for, `file_path` is where we search, and
-/// `ignore_case` is toggled by the `IGNORE_CASE` environment variable.
+use clap::Parser;
+
+// Holds the parsed command-line configuration.
+//
+// Deriving `clap::Parser` turns this struct *into* the CLI: each field becomes
+// an argument, the `///` doc comments below become the `--help` text, and clap
+// generates the parser, usage errors, `--help`/`--version`, and exit codes for
+// us. This replaces the hand-rolled `args` indexing we started with — clap is
+// how real Rust CLIs parse input. (Note: these `//` comments stay internal;
+// only `///` doc comments show up in `--help`.)
+#[derive(Parser)]
+#[command(name = "minigrep", version, about = "A tiny grep clone written in Rust")]
 pub struct Config {
+    /// The string to search for
     pub query: String,
+
+    /// Path to the file to search
     pub file_path: String,
+
+    /// Search case-insensitively (also enabled by setting IGNORE_CASE=true)
+    //
+    // `-i`/`--ignore-case` is a pure on/off flag: writing `-i` sets it to true
+    // and it takes no value, so `minigrep -i who poem.txt` reads naturally.
+    // `env = "IGNORE_CASE"` lets clap also flip it from the environment; because
+    // the field is a plain `bool`, the env var must be `true` or `false`.
+    #[arg(short, long, env = "IGNORE_CASE")]
     pub ignore_case: bool,
-}
-
-impl Config {
-    /// Builds a `Config` from the raw arguments.
-    ///
-    /// Returns `Err(&'static str)` instead of panicking so `main` can print a
-    /// friendly message and exit cleanly. This is the idiomatic Rust way to
-    /// surface recoverable errors.
-    pub fn build(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 3 {
-            return Err("not enough arguments");
-        }
-
-        // `clone` keeps things simple: `Config` owns its strings rather than
-        // borrowing from `args`, which avoids lifetime plumbing while learning.
-        let query = args[1].clone();
-        let file_path = args[2].clone();
-
-        // Case-insensitive search is opt-in via an env var. `is_ok()` is true
-        // whenever the variable is set (to any value).
-        let ignore_case = env::var("IGNORE_CASE").is_ok();
-
-        Ok(Config {
-            query,
-            file_path,
-            ignore_case,
-        })
-    }
 }
 
 /// Runs the search and prints matching lines.
@@ -88,22 +78,35 @@ pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<&'a st
 mod tests {
     use super::*;
 
+    // clap's derive macro can produce a subtly invalid CLI; `debug_assert`
+    // catches those mistakes at test time. This is the recommended smoke test.
     #[test]
-    fn build_fails_with_too_few_args() {
-        let args = vec![String::from("minigrep")];
-        assert!(Config::build(&args).is_err());
+    fn cli_definition_is_valid() {
+        use clap::CommandFactory;
+        Config::command().debug_assert();
     }
 
     #[test]
-    fn build_succeeds_with_enough_args() {
-        let args = vec![
-            String::from("minigrep"),
-            String::from("query"),
-            String::from("file.txt"),
-        ];
-        let config = Config::build(&args).unwrap();
+    fn parses_positional_args() {
+        // `try_parse_from` lets us feed argv in a test without touching the real
+        // process arguments. Note argv[0] is the program name, as in a real run.
+        let config = Config::try_parse_from(["minigrep", "query", "file.txt"]).unwrap();
         assert_eq!(config.query, "query");
         assert_eq!(config.file_path, "file.txt");
+        assert!(!config.ignore_case);
+    }
+
+    #[test]
+    fn ignore_case_flag_sets_true() {
+        let config =
+            Config::try_parse_from(["minigrep", "-i", "query", "file.txt"]).unwrap();
+        assert!(config.ignore_case);
+    }
+
+    #[test]
+    fn missing_file_path_is_an_error() {
+        // Only one positional given — clap reports the missing argument itself.
+        assert!(Config::try_parse_from(["minigrep", "query"]).is_err());
     }
 
     #[test]

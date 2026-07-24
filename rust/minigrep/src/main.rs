@@ -1,18 +1,14 @@
-use std::env;
 use std::process;
 
+use clap::Parser;
 use minigrep::Config;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    // `Config::build` returns a Result, so we handle the error case explicitly
-    // instead of panicking. `unwrap_or_else` lets us run a closure on the Err.
-    let config = Config::build(&args).unwrap_or_else(|err| {
-        eprintln!("Problem parsing arguments: {err}");
-        eprintln!("Usage: minigrep <query> <file_path>");
-        process::exit(1);
-    });
+    // `Config::parse()` (from clap's `Parser` trait) reads the process arguments,
+    // and on bad input it prints a helpful error + usage and exits for us — so
+    // there's no manual argument-count check here anymore. It also wires up
+    // `--help` and `--version` automatically.
+    let config = Config::parse();
 
     // `run` returns Result<(), Box<dyn Error>>. We only care about the Err arm
     // here (`if let`), because the success value is just the unit type `()`.

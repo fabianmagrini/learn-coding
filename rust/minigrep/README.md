@@ -9,12 +9,13 @@ sitting, but it exercises the concepts that make Rust *Rust*.
 | Concept | Where to look |
 | --- | --- |
 | **Ownership & borrowing** | `search` returns `Vec<&'a str>` — slices that borrow from the file contents, tied together by the lifetime `'a` |
-| **`Result` & the `?` operator** | `Config::build` and `run` in `src/lib.rs` return `Result` instead of panicking |
-| **Structs & methods** | `Config` models the parsed arguments; `Config::build` is an associated function |
+| **`Result` & the `?` operator** | `run` in `src/lib.rs` returns `Result` and uses `?` to propagate file-read errors |
+| **Structs & derive macros** | `Config` derives `clap::Parser`, turning the struct into the CLI definition |
+| **CLI parsing with a crate** | `clap` provides argument parsing, `--help`/`--version`, and error handling — see `Config` in `src/lib.rs` |
 | **Iterators & closures** | `.lines().filter(...).collect()` is idiomatic iterator style |
-| **Pattern matching / `if let`** | `main.rs` handles errors with `unwrap_or_else` and `if let Err(e)` |
-| **Environment variables** | `IGNORE_CASE` toggles case-insensitive search |
-| **Unit testing** | `#[cfg(test)] mod tests` at the bottom of `src/lib.rs` |
+| **Pattern matching / `if let`** | `main.rs` handles the run error with `if let Err(e)` |
+| **Environment variables** | `IGNORE_CASE=true` toggles case-insensitive search (wired up by clap's `env`) |
+| **Unit testing** | `#[cfg(test)] mod tests` at the bottom of `src/lib.rs`, including clap-parsing tests |
 | **lib + bin split** | Logic lives in `src/lib.rs` (testable); `src/main.rs` is a thin wrapper |
 
 ## Prerequisites
@@ -34,12 +35,18 @@ Verify: `cargo --version`
 ```bash
 cd rust/minigrep
 
+# See the auto-generated help (clap builds this from the struct + doc comments):
+cargo run -- --help
+
 # Case-sensitive search — the poem capitalises "Who", so lowercase "who"
 # matches nothing here. Try "nobody" to see a hit:
 cargo run -- nobody poem.txt
 
-# Case-insensitive search (env var toggles it) — now "who" matches "Who":
-IGNORE_CASE=1 cargo run -- who poem.txt
+# Case-insensitive search via the -i / --ignore-case flag — now "who" matches "Who":
+cargo run -- -i who poem.txt
+
+# The same toggle is also available as an environment variable:
+IGNORE_CASE=true cargo run -- who poem.txt
 ```
 
 The `--` separates cargo's own flags from arguments passed to *your* program.
@@ -51,7 +58,7 @@ $ cargo run -- nobody poem.txt
 I'm nobody! Who are you?
 Are you nobody, too?
 
-$ IGNORE_CASE=1 cargo run -- who poem.txt
+$ cargo run -- -i who poem.txt
 I'm nobody! Who are you?
 ```
 
@@ -61,13 +68,14 @@ I'm nobody! Who are you?
 cargo test
 ```
 
-Five tests cover argument parsing, case-sensitive and case-insensitive search, and the
-empty-result case.
+Seven tests cover clap argument parsing (positional args, the `-i` flag, a missing
+argument, and a `debug_assert` smoke test of the CLI definition), case-sensitive and
+case-insensitive search, and the empty-result case.
 
 ## Suggested exercises (to keep learning)
 
-1. **Add real argument parsing** with the [`clap`](https://crates.io/crates/clap) crate
-   (`cargo add clap --features derive`) instead of indexing `args`.
+1. ✅ **Add real argument parsing** with the [`clap`](https://crates.io/crates/clap)
+   crate instead of indexing `args`. — *done; see `Config` in `src/lib.rs`.*
 2. **Highlight the match** in each printed line using ANSI colour codes.
 3. **Read from stdin** when no file path is given, so you can pipe into it: `cat poem.txt | minigrep who`.
 4. **Add a line-number flag** (`-n`) that prints `line_number: matched text`.
@@ -79,8 +87,8 @@ empty-result case.
 rust/minigrep/
 ├── Cargo.toml      # package manifest + dependencies
 ├── src/
-│   ├── main.rs     # thin CLI entry point (arg collection, error exit codes)
-│   └── lib.rs      # Config, run, search, search_case_insensitive + tests
+│   ├── main.rs     # thin CLI entry point (Config::parse + error exit code)
+│   └── lib.rs      # Config (clap-derived), run, search, search_case_insensitive + tests
 ├── poem.txt        # sample input to search
 └── README.md
 ```

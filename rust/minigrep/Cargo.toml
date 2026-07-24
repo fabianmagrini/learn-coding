@@ -13,3 +13,4 @@ name = "minigrep"
 path = "src/lib.rs"
 
 [dependencies]
+clap = { version = "4", features = ["derive", "env"] }
