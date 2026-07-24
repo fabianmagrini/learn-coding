@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fs;
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Read};
 
 use clap::Parser;
 
@@ -24,8 +24,12 @@ pub struct Config {
     /// The string to search for
     pub query: String,
 
-    /// Path to the file to search
-    pub file_path: String,
+    /// Path to the file to search. Reads from standard input when omitted,
+    /// so you can pipe text in: `cat poem.txt | minigrep who`.
+    //
+    // Making the field `Option<String>` tells clap this positional is optional.
+    // `None` means "no path was given" — our cue to read from stdin instead.
+    pub file_path: Option<String>,
 
     /// Search case-insensitively (also enabled by setting IGNORE_CASE=true)
     //
@@ -43,8 +47,9 @@ pub struct Config {
 /// implements `Error` — like the one from `fs::read_to_string` — can bubble up
 /// through the `?` operator.
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    // The `?` propagates a file-read error up to the caller instead of panicking.
-    let contents = fs::read_to_string(&config.file_path)?;
+    // `as_deref` turns `Option<String>` into `Option<&str>` without cloning, so
+    // `read_input` can borrow the path. The `?` propagates any read error up.
+    let contents = read_input(config.file_path.as_deref())?;
 
     let results = if config.ignore_case {
         search_case_insensitive(&config.query, &contents)
@@ -66,6 +71,24 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+/// Reads the entire search input: from the file at `path` when given, or from
+/// standard input when `path` is `None`. Reading stdin is what lets you pipe
+/// text in — `cat poem.txt | minigrep who` — instead of naming a file.
+fn read_input(path: Option<&str>) -> Result<String, Box<dyn Error>> {
+    // `match` on the `Option` makes the two input sources explicit and forces us
+    // to handle both — the compiler won't let us forget the `None` arm.
+    match path {
+        Some(path) => Ok(fs::read_to_string(path)?),
+        None => {
+            let mut buffer = String::new();
+            // `read_to_string` comes from the `Read` trait; it fills `buffer`
+            // with everything piped into the program until end-of-input.
+            std::io::stdin().read_to_string(&mut buffer)?;
+            Ok(buffer)
+        }
+    }
 }
 
 /// Wraps every occurrence of `query` inside `line` with ANSI highlight codes,
@@ -150,8 +173,16 @@ mod tests {
         // process arguments. Note argv[0] is the program name, as in a real run.
         let config = Config::try_parse_from(["minigrep", "query", "file.txt"]).unwrap();
         assert_eq!(config.query, "query");
-        assert_eq!(config.file_path, "file.txt");
+        assert_eq!(config.file_path.as_deref(), Some("file.txt"));
         assert!(!config.ignore_case);
+    }
+
+    #[test]
+    fn file_path_is_optional() {
+        // No file path — the field is `None`, which `run` treats as "read stdin".
+        let config = Config::try_parse_from(["minigrep", "query"]).unwrap();
+        assert_eq!(config.query, "query");
+        assert_eq!(config.file_path, None);
     }
 
     #[test]
@@ -162,9 +193,10 @@ mod tests {
     }
 
     #[test]
-    fn missing_file_path_is_an_error() {
-        // Only one positional given — clap reports the missing argument itself.
-        assert!(Config::try_parse_from(["minigrep", "query"]).is_err());
+    fn missing_query_is_an_error() {
+        // `query` is required, so no positionals at all is a usage error that
+        // clap reports itself. (A lone `query` is now valid — it reads stdin.)
+        assert!(Config::try_parse_from(["minigrep"]).is_err());
     }
 
     #[test]
