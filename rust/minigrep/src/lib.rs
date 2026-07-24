@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fs;
 use std::io::{IsTerminal, Read};
+use std::path::Path;
 
 use clap::Parser;
 
@@ -24,8 +25,9 @@ pub struct Config {
     /// The string to search for
     pub query: String,
 
-    /// Path to the file to search. Reads from standard input when omitted,
-    /// so you can pipe text in: `cat poem.txt | minigrep who`.
+    /// File or directory to search. A directory is searched recursively for
+    /// `.txt` files. Reads from standard input when omitted, so you can pipe
+    /// text in: `cat poem.txt | minigrep who`.
     //
     // Making the field `Option<String>` tells clap this positional is optional.
     // `None` means "no path was given" — our cue to read from stdin instead.
@@ -51,55 +53,118 @@ pub struct Config {
 /// implements `Error` — like the one from `fs::read_to_string` — can bubble up
 /// through the `?` operator.
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    // `as_deref` turns `Option<String>` into `Option<&str>` without cloning, so
-    // `read_input` can borrow the path. The `?` propagates any read error up.
-    let contents = read_input(config.file_path.as_deref())?;
-
-    let results = if config.ignore_case {
-        search_case_insensitive(&config.query, &contents)
-    } else {
-        search(&config.query, &contents)
-    };
+    // Gather everything to search: one source for stdin/a single file, or many
+    // sources when the path is a directory. The `?` propagates any read error.
+    let sources = collect_sources(config.file_path.as_deref())?;
 
     // Only emit colour codes when writing to a real terminal. If the output is
     // piped into another program or redirected to a file, `is_terminal()` is
     // false and we print plain text so the escape sequences don't pollute it.
     let colorize = std::io::stdout().is_terminal();
 
-    // Destructure each `(number, line)` tuple right in the `for` pattern.
-    for (number, line) in results {
-        let text = if colorize {
-            highlight(line, &config.query, config.ignore_case)
+    for source in &sources {
+        let results = if config.ignore_case {
+            search_case_insensitive(&config.query, &source.contents)
         } else {
-            line.to_string()
+            search(&config.query, &source.contents)
         };
 
-        if config.line_number {
-            println!("{number}: {text}");
-        } else {
-            println!("{text}");
+        // Destructure each `(number, line)` tuple right in the `for` pattern.
+        for (number, line) in results {
+            let text = if colorize {
+                highlight(line, &config.query, config.ignore_case)
+            } else {
+                line.to_string()
+            };
+
+            println!(
+                "{}",
+                format_match(source.name.as_deref(), number, config.line_number, &text)
+            );
         }
     }
 
     Ok(())
 }
 
-/// Reads the entire search input: from the file at `path` when given, or from
-/// standard input when `path` is `None`. Reading stdin is what lets you pipe
-/// text in — `cat poem.txt | minigrep who` — instead of naming a file.
-fn read_input(path: Option<&str>) -> Result<String, Box<dyn Error>> {
-    // `match` on the `Option` makes the two input sources explicit and forces us
-    // to handle both — the compiler won't let us forget the `None` arm.
+/// One unit of text to search, plus an optional display name used as an output
+/// prefix. `name` is `Some(path)` when searching a directory (so results say
+/// which file matched, like `grep -r`) and `None` for stdin or a single file.
+struct Source {
+    name: Option<String>,
+    contents: String,
+}
+
+/// Builds the list of sources to search from the given path:
+/// - `None` → read standard input as a single, unnamed source.
+/// - a file → read it as a single, unnamed source (no filename prefix).
+/// - a directory → recursively collect every `.txt` file, each named by path.
+fn collect_sources(path: Option<&str>) -> Result<Vec<Source>, Box<dyn Error>> {
     match path {
-        Some(path) => Ok(fs::read_to_string(path)?),
         None => {
             let mut buffer = String::new();
             // `read_to_string` comes from the `Read` trait; it fills `buffer`
             // with everything piped into the program until end-of-input.
             std::io::stdin().read_to_string(&mut buffer)?;
-            Ok(buffer)
+            Ok(vec![Source {
+                name: None,
+                contents: buffer,
+            }])
+        }
+        Some(path) => {
+            if fs::metadata(path)?.is_dir() {
+                let mut sources = Vec::new();
+                collect_txt_files(Path::new(path), &mut sources)?;
+                // Sort by path so output order is stable across runs (directory
+                // iteration order is otherwise unspecified by the OS).
+                sources.sort_by(|a, b| a.name.cmp(&b.name));
+                Ok(sources)
+            } else {
+                Ok(vec![Source {
+                    name: None,
+                    contents: fs::read_to_string(path)?,
+                }])
+            }
         }
     }
+}
+
+/// Recursively walks `dir`, pushing a [`Source`] for every `.txt` file found
+/// into `out`. Recursion mirrors the directory tree; each nested folder is
+/// visited by calling this function again.
+///
+/// (For simplicity this follows symlinks and does not guard against symlink
+/// cycles — fine for a learning demo, but something a real tool would handle.)
+fn collect_txt_files(dir: &Path, out: &mut Vec<Source>) -> Result<(), Box<dyn Error>> {
+    for entry in fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            collect_txt_files(&path, out)?;
+        } else if path.extension().and_then(|ext| ext.to_str()) == Some("txt") {
+            out.push(Source {
+                name: Some(path.display().to_string()),
+                contents: fs::read_to_string(&path)?,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Formats one match line for output: an optional `name:` prefix (when
+/// searching a directory), an optional `number: ` prefix (with `-n`), then the
+/// matched text. Keeping this pure makes the output format easy to unit-test.
+fn format_match(name: Option<&str>, number: usize, show_number: bool, text: &str) -> String {
+    let mut out = String::new();
+    if let Some(name) = name {
+        out.push_str(name);
+        out.push(':');
+    }
+    if show_number {
+        out.push_str(&number.to_string());
+        out.push_str(": ");
+    }
+    out.push_str(text);
+    out
 }
 
 /// Wraps every occurrence of `query` inside `line` with ANSI highlight codes,
@@ -296,5 +361,63 @@ Trust me.";
     #[test]
     fn highlight_with_empty_query_is_unchanged() {
         assert_eq!(highlight("hello world", "", false), "hello world");
+    }
+
+    #[test]
+    fn format_match_plain_is_just_the_text() {
+        assert_eq!(format_match(None, 3, false, "hello"), "hello");
+    }
+
+    #[test]
+    fn format_match_with_line_number() {
+        assert_eq!(format_match(None, 3, true, "hello"), "3: hello");
+    }
+
+    #[test]
+    fn format_match_with_file_name() {
+        assert_eq!(format_match(Some("a.txt"), 3, false, "hello"), "a.txt:hello");
+    }
+
+    #[test]
+    fn format_match_with_name_and_number() {
+        assert_eq!(
+            format_match(Some("a.txt"), 3, true, "hello"),
+            "a.txt:3: hello"
+        );
+    }
+
+    // Creates a fresh, uniquely-named directory under the system temp dir so
+    // parallel test runs never collide.
+    fn unique_temp_dir() -> std::path::PathBuf {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir()
+            .join(format!("minigrep-test-{}-{}", std::process::id(), nanos));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn collect_sources_recurses_txt_files_only() {
+        let root = unique_temp_dir();
+        let sub = root.join("nested");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(root.join("a.txt"), "alpha\n").unwrap();
+        std::fs::write(root.join("skip.md"), "ignored\n").unwrap();
+        std::fs::write(sub.join("b.txt"), "bravo\n").unwrap();
+
+        let sources = collect_sources(Some(root.to_str().unwrap())).unwrap();
+        let names: Vec<String> = sources.iter().filter_map(|s| s.name.clone()).collect();
+
+        // Two `.txt` files (one nested); the `.md` file is excluded.
+        assert_eq!(names.len(), 2);
+        assert!(names.iter().any(|n| n.ends_with("a.txt")));
+        assert!(names.iter().any(|n| n.ends_with("b.txt")));
+        assert!(names.iter().all(|n| !n.ends_with("skip.md")));
+
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }
